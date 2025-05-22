@@ -1,67 +1,109 @@
-# Patch-Level Training for Large Language Models
+# GSM-8K Fine-tuning with LoRA
 
-This repo contains the code for our paper [Patch-Level Training for Large Language Models](https://arxiv.org/pdf/2407.12665).
+This project implements fine-tuning of language models on the GSM-8K dataset using LoRA (Low-Rank Adaptation) for efficient parameter-efficient fine-tuning.
 
-Patch-level training is an efficient training approach for large language models (LLMs), in which models read training data in patches and learn to predict the next patch. Following this, a small amount of training data is used to adjust the model to the token-level. This approach can achieve an even lower loss in comparison with training from scratch, while reducing training costs by half.
+## Project Structure
+
+```
+src/
+├── config/
+│   └── config.py         # Configuration classes
+├── data/
+│   └── dataset.py        # Dataset processing
+├── models/
+│   └── model.py          # Model management and LoRA setup
+├── training/
+│   └── trainer.py        # Training setup and execution
+├── evaluation/
+│   └── evaluator.py      # Model evaluation
+└── main.py              # Main execution script
+```
+
+## Setup
+
+1. Create a virtual environment (recommended):
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+2. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+3. Set up Hugging Face authentication:
+```bash
+huggingface-cli login
+```
 
 ## Usage
 
-The implementation of patch-level training is quite straightforward, with only 10 lines of core code – feel free to directly incorporate it into your LLM training code. Our implementation is based on the LLaMA model [modeling_llama.py](https://github.com/shaochenze/PatchTrain/blob/main/modeling_llama.py), with the primary changes as follows:
+The script supports different modes of operation through command-line arguments:
 
-### Model Input
-```python
-884    num_patches = seq_length // self.patch_size
-885    inputs_embeds = inputs_embeds.view(batch_size, num_patches, self.patch_size, -1).mean(2)
-886    position_ids = position_ids[:, :num_patches]
-```
+### Command-line Options
 
-### Loss Calculation
-```python
-1058    shift_logits = logits[..., :-1, :].reshape(-1, self.config.vocab_size)
-1059    shift_labels = labels[..., self.patch_size:].reshape(-1, self.patch_size)
-1060    loss = 0
-1061    log_probs = F.log_softmax(shift_logits, dim=1)
-1062    for i in range(self.patch_size):
-1063        loss = loss + F.nll_loss(log_probs, shift_labels[:, i])
-1064    loss = loss / self.patch_size
-```
+- `--mode`: Choose the execution mode
+  - `evaluate`: Only evaluate a pretrained model
+  - `full_finetune`: Full model fine-tuning
+  - `lora_finetune`: LoRA fine-tuning (default)
+- `--model_path`: Path to a pretrained model for evaluation or continued training
+- `--save_path`: Where to save the model/adapters (default: "./outputs")
+- `--eval_only`: Skip training and only evaluate the model
 
-## Example
+### Usage Examples
 
-We provide an example here for quick replication. Required environment: transformers>=4.34.
-
-Due to copyright issues, the pile dataset is not publicly available now. An alternative is [pile-uncopyrighted](https://huggingface.co/datasets/monology/pile-uncopyrighted), which contains approximately 25% fewer tokens than pile. First, run the following script to download and pre-process the pile-uncopyrighted dataset, getting ~270B tokens:
-
+1. **Evaluate a pretrained model**:
 ```bash
-bash get_data.sh
+python src/main.py --mode evaluate --model_path path/to/model --eval_only
 ```
 
-Next, train a Transformer with 370M parameters on the pile-uncopyrighted dataset. Run the following script for token-level training:
-
+2. **Full fine-tuning**:
 ```bash
-bash run_token.sh
+python src/main.py --mode full_finetune --save_path ./full_finetuned_model
 ```
 
-Run the following script to perform patch-level training with a patch size of K=4 on 180B tokens, followed by token-level training on 90B tokens.
-
+3. **LoRA fine-tuning**:
 ```bash
-bash run_patch.sh
+python src/main.py --mode lora_finetune --save_path ./lora_adapters
 ```
 
-In practice, the acceleration rate of patch-level training is lower than the patch size K. This is primarily due to the time consumed in data loading and processing, especially the tokenization takes a lot of time. The acceleration rate will be much closer to K if the streaming mode is disabled.
-
-### Loss Curves
-
-Below are the loss curves obtained from our training on the Pile dataset (360B tokens), provided for reference.
-![loss](./loss.png)
-
-## Citation
-If you find the resources in this repository useful, please cite as:
+4. **Continue training from a checkpoint**:
+```bash
+python src/main.py --mode lora_finetune --model_path path/to/checkpoint --save_path ./new_adapters
 ```
-@article{shao2024patch,
-  title={Patch-Level Training for Large Language Models},
-  author={Shao, Chenze and Meng, Fandong and Zhou, Jie},
-  journal={arXiv preprint arXiv:2407.12665},
-  year={2024}
-}
-```
+
+### What Each Mode Does
+
+1. **Evaluate Mode**:
+   - Loads a pretrained model
+   - Evaluates on the GSM-8K test set
+   - Reports exact match accuracy
+   - Shows example predictions
+
+2. **Full Fine-tuning Mode**:
+   - Fine-tunes all model parameters
+   - Saves the complete model
+   - Evaluates performance after training
+
+3. **LoRA Fine-tuning Mode**:
+   - Applies LoRA for parameter-efficient fine-tuning
+   - Only updates adapter parameters
+   - Saves only the LoRA adapters
+   - Evaluates performance after training
+
+## Configuration
+
+You can modify the training parameters in `src/config/config.py`:
+- Model configuration (model name, LoRA rank, etc.)
+- Training configuration (learning rate, epochs, etc.)
+- Data configuration (prompt templates)
+- Evaluation configuration (metrics, sampling)
+
+## Output
+
+The script will output:
+- Training progress (if training)
+- Evaluation metrics
+- Example predictions
+- Saved model or adapters in the specified output directory 
