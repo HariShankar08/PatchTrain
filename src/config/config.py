@@ -6,12 +6,13 @@ class RunMode(Enum):
     EVALUATE = "evaluate"  # Only evaluate a pretrained model
     FULL_FINETUNE = "full_finetune"  # Full model finetuning
     LORA_FINETUNE = "lora_finetune"  # LoRA finetuning
+    PATCH_TRAIN = "patch_train"
 
 @dataclass
 class RunConfig:
-    mode: RunMode = RunMode.LORA_FINETUNE
-    model_path: str = None  # Path to pretrained model for evaluation
-    save_path: str = "./outputs"  # Where to save the model/adapters
+    mode: RunMode
+    model_path: Optional[str]
+    save_path: str
     eval_only: bool = False  # Whether to skip training and only evaluate
 
 @dataclass

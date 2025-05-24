@@ -15,7 +15,7 @@ def parse_args():
         type=str,
         choices=[mode.value for mode in RunMode],
         default=RunMode.LORA_FINETUNE.value,
-        help="Execution mode: evaluate, full_finetune, or lora_finetune"
+        help="Execution mode: evaluate, full_finetune, lora_finetune, or patch_train"
     )
     parser.add_argument(
         "--model_path",
@@ -32,6 +32,18 @@ def parse_args():
         "--eval_only",
         action="store_true",
         help="Skip training and only evaluate the model"
+    )
+    parser.add_argument(
+        "--patch_size",
+        type=int,
+        default=4,
+        help="Size of patches for patch training"
+    )
+    parser.add_argument(
+        "--lambda_ratio",
+        type=float,
+        default=2/3,
+        help="Ratio of epochs to use patch training (e.g., 2/3 means use patch training for 2/3 of epochs)"
     )
     return parser.parse_args()
 
@@ -91,30 +103,67 @@ def main():
         if run_config.mode == RunMode.LORA_FINETUNE:
             print("Setting up LoRA...")
             model = model_manager.setup_lora()
+            
+            # Setup training
+            print("Setting up training...")
+            trainer_manager = ModelTrainer(training_config)
+            trainer = trainer_manager.setup_trainer(
+                model=model,
+                train_dataset=train_dataset,
+                eval_dataset=test_dataset,
+                tokenizer=tokenizer
+            )
+
+            # Train model
+            trainer = trainer_manager.train(trainer)
+
+            # Save adapters
+            print(f"Saving adapters to {run_config.save_path}...")
+            model_manager.save_adapters(run_config.save_path)
+            
         elif run_config.mode == RunMode.FULL_FINETUNE:
             print("Preparing for full fine-tuning...")
-            # No special setup needed for full fine-tuning
-            pass
+            # Setup training
+            print("Setting up training...")
+            trainer_manager = ModelTrainer(training_config)
+            trainer = trainer_manager.setup_trainer(
+                model=model,
+                train_dataset=train_dataset,
+                eval_dataset=test_dataset,
+                tokenizer=tokenizer
+            )
 
-        # Setup training
-        print("Setting up training...")
-        trainer_manager = ModelTrainer(training_config)
-        trainer = trainer_manager.setup_trainer(
-            model=model,
-            train_dataset=train_dataset,
-            eval_dataset=test_dataset,
-            tokenizer=tokenizer
-        )
+            # Train model
+            trainer = trainer_manager.train(trainer)
 
-        # Train model
-        trainer = trainer_manager.train(trainer)
-
-        # Save model/adapters
-        print(f"Saving to {run_config.save_path}...")
-        if run_config.mode == RunMode.LORA_FINETUNE:
-            model_manager.save_adapters(run_config.save_path)
-        else:
+            # Save model
+            print(f"Saving model to {run_config.save_path}...")
             trainer.save_model(run_config.save_path)
+            
+        elif run_config.mode == RunMode.PATCH_TRAIN:
+            print("Preparing for patch training...")
+            # Train with patch strategy
+            print(f"Starting patch training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
+            model = model_manager.train_patch_model(
+                train_dataset=train_dataset,
+                eval_dataset=test_dataset,
+                patch_size=args.patch_size,
+                lambda_ratio=args.lambda_ratio,
+                num_epochs=training_config.num_train_epochs,
+                learning_rate=training_config.learning_rate,
+                warmup_steps=training_config.warmup_steps,
+                gradient_accumulation_steps=training_config.gradient_accumulation_steps,
+                fp16=training_config.fp16,
+                logging_steps=training_config.logging_steps,
+                evaluation_strategy=training_config.evaluation_strategy,
+                eval_steps=training_config.eval_steps,
+                save_strategy=training_config.save_strategy,
+            )
+            
+            # Save model
+            print(f"Saving model to {run_config.save_path}...")
+            model.save_pretrained(run_config.save_path)
+            tokenizer.save_pretrained(run_config.save_path)
 
     # Evaluate model
     print("Evaluating model...")
