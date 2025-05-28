@@ -1,5 +1,5 @@
 from transformers import Trainer, TrainingArguments, DataCollatorForLanguageModeling
-from ..config.config import TrainingConfig
+from config.config import TrainingConfig
 
 class ModelTrainer:
     def __init__(self, config: TrainingConfig):
@@ -15,10 +15,11 @@ class ModelTrainer:
             num_train_epochs=self.config.num_train_epochs,
             learning_rate=self.config.learning_rate,
             fp16=self.config.fp16,
+            bf16=self.config.bf16,
             logging_steps=self.config.logging_steps,
-            evaluation_strategy=self.config.evaluation_strategy,
+            eval_strategy=self.config.eval_strategy,
             eval_steps=self.config.eval_steps,
-            save_strategy=self.config.save_strategy,
+            # save_strategy=self.config.save_strategy,
         )
 
         data_collator = DataCollatorForLanguageModeling(

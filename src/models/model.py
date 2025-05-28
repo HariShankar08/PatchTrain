@@ -1,7 +1,7 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
+from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
-from ..config.config import ModelConfig
+from config.config import ModelConfig
 from .patch_model import PatchTrainModel
 
 class ModelManager:
@@ -131,13 +131,18 @@ class ModelManager:
                 **trainer_kwargs
             )
             
+            data_collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm=False
+            )
+            
             # Train with patch model
             trainer = Trainer(
                 model=patch_model,
                 args=patch_training_args,
                 train_dataset=train_dataset,
                 eval_dataset=eval_dataset,
-                **trainer_kwargs
+                data_collator=data_collator
             )
             trainer.train()
             
@@ -147,32 +152,28 @@ class ModelManager:
         # Phase 2: Standard Training
         if standard_epochs > 0:
             print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
-            standard_model = PatchTrainModel(
-                self.model,
-                patch_size=1,
-                patch_calculation_method="mean"
-            )
+            standard_model = self.model
             
             # Create training arguments for standard phase
             standard_training_args = TrainingArguments(
                 num_train_epochs=standard_epochs,
                 **trainer_kwargs
             )
-            
+            torch.cuda.empty_cache()
             # Train with standard model
             trainer = Trainer(
                 model=standard_model,
                 args=standard_training_args,
                 train_dataset=train_dataset,
                 eval_dataset=eval_dataset,
-                **trainer_kwargs
+                data_collator=data_collator
             )
             trainer.train()
             
             # Get the final trained model
-            self.model = standard_model.base_model
-            
-        return self.model
+            self.model = standard_model
+            # self.model.save_pretrained('PT_model')
+        return trainer, self.model
 
     def save_adapters(self, path: str):
         """Save the LoRA adapters."""

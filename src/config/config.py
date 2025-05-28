@@ -21,7 +21,7 @@ class ModelConfig:
     use_4bit: bool = True
     lora_rank: int = 8
     max_seq_length: int = 512
-    batch_size: int = 4
+    batch_size: int = 2
 
 @dataclass
 class TrainingConfig:
@@ -30,11 +30,13 @@ class TrainingConfig:
     learning_rate: float = 2e-4
     warmup_steps: int = 100
     gradient_accumulation_steps: int = 4
-    fp16: bool = True
+    fp16: bool = False
+    bf16: bool = True
+    max_grad_norm=1.0
     logging_steps: int = 10
-    evaluation_strategy: str = "steps"
+    eval_strategy: str = "steps"
     eval_steps: int = 200
-    save_strategy: str = "steps"
+    save_strategy: str = "no"
 
 @dataclass
 class DataConfig:

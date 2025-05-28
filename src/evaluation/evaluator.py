@@ -1,7 +1,7 @@
 import torch
 import evaluate
 from typing import Dict, List
-from ..config.config import EvaluationConfig
+from config.config import EvaluationConfig
 
 class ModelEvaluator:
     def __init__(self, config: EvaluationConfig):

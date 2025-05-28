@@ -144,7 +144,7 @@ def main():
             print("Preparing for patch training...")
             # Train with patch strategy
             print(f"Starting patch training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
-            model = model_manager.train_patch_model(
+            trainer, model = model_manager.train_patch_model(
                 train_dataset=train_dataset,
                 eval_dataset=test_dataset,
                 patch_size=args.patch_size,
@@ -154,16 +154,18 @@ def main():
                 warmup_steps=training_config.warmup_steps,
                 gradient_accumulation_steps=training_config.gradient_accumulation_steps,
                 fp16=training_config.fp16,
+                bf16=training_config.bf16,
                 logging_steps=training_config.logging_steps,
-                evaluation_strategy=training_config.evaluation_strategy,
+                eval_strategy=training_config.eval_strategy,
                 eval_steps=training_config.eval_steps,
                 save_strategy=training_config.save_strategy,
             )
             
             # Save model
             print(f"Saving model to {run_config.save_path}...")
-            model.save_pretrained(run_config.save_path)
-            tokenizer.save_pretrained(run_config.save_path)
+            trainer.save_model(run_config.save_path)
+            # model.save_pretrained(run_config.save_path)
+            # tokenizer.save_pretrained(run_config.save_path)
 
     # Evaluate model
     print("Evaluating model...")

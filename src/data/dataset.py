@@ -1,7 +1,7 @@
 from datasets import load_dataset
 from transformers import PreTrainedTokenizer
 from typing import Dict, Any
-from ..config.config import DataConfig
+from config.config import DataConfig
 
 class GSM8KProcessor:
     def __init__(self, config: DataConfig):
@@ -25,8 +25,8 @@ class GSM8KProcessor:
 
     def preprocess_dataset(self, tokenizer: PreTrainedTokenizer):
         """Preprocess the entire dataset."""
-        if self.dataset is None:
-            self.load_dataset()
+        if self.dataset is None or tokenizer is None:
+            return self.load_dataset()
 
         # Format examples
         tokenized_dataset = self.dataset.map(
