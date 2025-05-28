@@ -56,7 +56,7 @@ def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
         dataset=test_dataset,
         device=device
     )
-    print(f"\nExact Match Score: {metrics['exact_match']:.2%}")
+    print(f"\nMetrics: {metrics}")
     evaluator.print_examples(predictions, references)
     return metrics
 
@@ -80,8 +80,10 @@ def main():
     print("Setting up data processing...")
     data_processor = GSM8KProcessor(data_config)
     tokenized_dataset = data_processor.preprocess_dataset(None)  # We'll tokenize after model loading
-    test_dataset = tokenized_dataset["test"]
-
+    test_dataset_for_evaluate = tokenized_dataset["test"]
+    print(test_dataset_for_evaluate)
+    print(test_dataset_for_evaluate[0])
+    # exit()
     # Setup model
     print("Setting up model...")
     model_manager = ModelManager(model_config)
@@ -94,12 +96,13 @@ def main():
         # Load base model
         model, tokenizer = model_manager.load_model_and_tokenizer()
 
-    # Retokenize dataset with the correct tokenizer
-    tokenized_dataset = data_processor.preprocess_dataset(tokenizer)
-    train_dataset = tokenized_dataset["train"]
-    test_dataset = tokenized_dataset["test"]
 
     if not run_config.eval_only:
+        # Retokenize dataset with the correct tokenizer
+        tokenized_dataset = data_processor.preprocess_dataset(tokenizer)
+        train_dataset = tokenized_dataset["train"]
+        test_dataset = tokenized_dataset["test"]
+
         if run_config.mode == RunMode.LORA_FINETUNE:
             print("Setting up LoRA...")
             model = model_manager.setup_lora()
@@ -172,7 +175,7 @@ def main():
     metrics = evaluate_model(
         model=model,
         tokenizer=tokenizer,
-        test_dataset=test_dataset,
+        test_dataset=test_dataset_for_evaluate,
         eval_config=eval_config,
         device=model_manager.device
     )
