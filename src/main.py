@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 from config.config import (
     ModelConfig, TrainingConfig, DataConfig, EvaluationConfig,
     RunConfig, RunMode
@@ -7,6 +8,9 @@ from data.dataset import GSM8KProcessor
 from models.model import ModelManager
 from training.trainer import ModelTrainer
 from evaluation.evaluator import ModelEvaluator
+import random
+import torch
+from transformers import set_seed
 
 def parse_args():
     parser = argparse.ArgumentParser(description="GSM-8K Model Training and Evaluation")
@@ -45,6 +49,12 @@ def parse_args():
         default=2/3,
         help="Ratio of epochs to use patch training (e.g., 2/3 means use patch training for 2/3 of epochs)"
     )
+    parser.add_argument(
+        "--num_runs",
+        type=int,
+        default=1,
+        help="Number of training runs with different seeds"
+    )
     return parser.parse_args()
 
 def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
@@ -56,28 +66,23 @@ def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
         dataset=test_dataset,
         device=device
     )
-    print(f"\nMetrics: {metrics}")
-    evaluator.print_examples(predictions, references)
     return metrics
 
-def main():
-    # Parse command line arguments
-    args = parse_args()
+def run_training_iteration(run_config, model_config, training_config, data_config, eval_config, seed, args):
+    """Run a single training iteration with the given seed."""
+    # Set random seed
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    set_seed(seed)  # Transformers specific
     
-    # Initialize configurations
-    run_config = RunConfig(
-        mode=RunMode(args.mode),
-        model_path=args.model_path,
-        save_path=args.save_path,
-        eval_only=args.eval_only
-    )
-    model_config = ModelConfig()
-    training_config = TrainingConfig()
-    data_config = DataConfig()
-    eval_config = EvaluationConfig()
-
     # Setup data processing
-    print("Setting up data processing...")
+    print(f"\nSetting up data processing for run {seed}...")
     data_processor = GSM8KProcessor(data_config)
     tokenized_dataset = data_processor.preprocess_dataset(None)  # We'll tokenize after model loading
     test_dataset_for_evaluate = tokenized_dataset["test"]
@@ -85,7 +90,7 @@ def main():
     print(test_dataset_for_evaluate[0])
     # exit()
     # Setup model
-    print("Setting up model...")
+    print(f"Setting up model for run {seed}...")
     model_manager = ModelManager(model_config)
     
     if run_config.model_path:
@@ -104,7 +109,7 @@ def main():
         test_dataset = tokenized_dataset["test"]
 
         if run_config.mode == RunMode.LORA_FINETUNE:
-            print("Setting up LoRA...")
+            print(f"Setting up LoRA for run {seed}...")
             model = model_manager.setup_lora()
             
             # Setup training
@@ -122,12 +127,12 @@ def main():
 
             # Save adapters
             print(f"Saving adapters to {run_config.save_path}...")
-            model_manager.save_adapters(run_config.save_path)
+            model_manager.save_adapters(f'{run_config.save_path}_seed{seed}')
             
         elif run_config.mode == RunMode.FULL_FINETUNE:
             print("Preparing for full fine-tuning...")
             # Setup training
-            print("Setting up training...")
+            print("Setting up training for run {seed}...")
             trainer_manager = ModelTrainer(training_config)
             trainer = trainer_manager.setup_trainer(
                 model=model,
@@ -141,7 +146,7 @@ def main():
 
             # Save model
             print(f"Saving model to {run_config.save_path}...")
-            trainer.save_model(run_config.save_path)
+            trainer.save_model(f'{run_config.save_path}_seed{seed}')
             
         elif run_config.mode == RunMode.PATCH_TRAIN:
             print("Preparing for patch training...")
@@ -164,14 +169,10 @@ def main():
                 save_strategy=training_config.save_strategy,
             )
             
-            # Save model
-            print(f"Saving model to {run_config.save_path}...")
-            trainer.save_model(run_config.save_path)
-            # model.save_pretrained(run_config.save_path)
-            # tokenizer.save_pretrained(run_config.save_path)
+            trainer.save_model(f"{run_config.save_path}_seed{seed}")
 
     # Evaluate model
-    print("Evaluating model...")
+    print(f"Evaluating model for run {seed}...")
     metrics = evaluate_model(
         model=model,
         tokenizer=tokenizer,
@@ -179,6 +180,52 @@ def main():
         eval_config=eval_config,
         device=model_manager.device
     )
+    
+    return metrics
+
+def main():
+    # Parse command line arguments
+    args = parse_args()
+    
+    # Initialize configurations
+    run_config = RunConfig(
+        mode=RunMode(args.mode),
+        model_path=args.model_path,
+        save_path=args.save_path,
+        eval_only=args.eval_only
+    )
+    model_config = ModelConfig()
+    training_config = TrainingConfig()
+    data_config = DataConfig()
+    eval_config = EvaluationConfig()
+
+    # Run multiple training iterations
+    all_metrics = []
+    for i in range(args.num_runs):
+        seed = i  # Use different seeds for each run
+        metrics = run_training_iteration(
+            run_config, model_config, training_config, 
+            data_config, eval_config, seed, args
+        )
+        all_metrics.append(metrics)
+        
+        # Print metrics for this run
+        print(f"\nMetrics for run {i+1} (seed {seed}):")
+        for metric_name, value in metrics.items():
+            print(f"{metric_name}: {value:.4f}")
+        
+        print('==============================================')
+
+    # Calculate and print aggregate statistics
+    if args.num_runs > 1:
+        print("\nAggregate Statistics:")
+        for metric_name in all_metrics[0].keys():
+            values = [m[metric_name] for m in all_metrics]
+            mean = np.mean(values)
+            std = np.std(values)
+            print(f"{metric_name}:")
+            print(f"  Mean: {mean:.4f}")
+            print(f"  Std:  {std:.4f}")
 
 if __name__ == "__main__":
     main() 

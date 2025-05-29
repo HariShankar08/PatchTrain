@@ -4,6 +4,7 @@ from typing import Dict, List
 from config.config import EvaluationConfig
 import numpy as np
 from math import exp
+from tqdm import tqdm
 
 class ModelEvaluator:
     def __init__(self, config: EvaluationConfig):
@@ -18,8 +19,7 @@ class ModelEvaluator:
         references: List[str] = []
         all_losses = []
 
-        for example in dataset.select(range(min(self.config.num_samples, len(dataset)))):
-            print(example)
+        for example in tqdm(dataset.select(range(min(self.config.num_samples, len(dataset)))), desc="Evaluating"):
             # Create prompt
             prompt = f"Question: {example['question']}\nLet's think step by step:"
             inputs = tokenizer(prompt, return_tensors="pt").to(device)
@@ -42,16 +42,16 @@ class ModelEvaluator:
                 )
                 
                 # Calculate perplexity
-                # Get logits from the output
-                #loss_out = model(inputs)
-                #logits = torch.stack(outputs.scores, dim=1).to(device)
-                # Shift tokens and logits to align them
-                #shift_logits = logits[..., :-1, :].contiguous()
-                #shift_labels = outputs.sequences[..., 1:].contiguous()
-                # Flatten the tokens and logits
-                # loss_fct = torch.nn.CrossEntropyLoss()
-                # loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
-                all_losses.append(0)
+                # Make the full prompt
+                full_prompt = f"{prompt}{ref_answer}"
+                # Tokenize the full prompt
+                full_prompt_tokens = tokenizer(full_prompt, return_tensors="pt").to(device)
+                # Get the logits
+                logits = model(full_prompt_tokens).logits
+                # Get the loss
+                loss_fct = torch.nn.CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, logits.size(-1)), full_prompt_tokens.input_ids.view(-1))
+                all_losses.append(loss.item())
 
             # Process prediction
             full_output = tokenizer.decode(outputs.sequences[0], skip_special_tokens=True)
