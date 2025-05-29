@@ -17,11 +17,11 @@ class RunConfig:
 
 @dataclass
 class ModelConfig:
-    model_name: str = "meta-llama/Meta-Llama-3-8B"
+    model_name: str = "facebook/opt-350m"
     use_4bit: bool = True
     lora_rank: int = 8
     max_seq_length: int = 512
-    batch_size: int = 2
+    batch_size: int = 8
 
 @dataclass
 class TrainingConfig:
