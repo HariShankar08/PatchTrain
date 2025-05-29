@@ -47,7 +47,7 @@ class ModelEvaluator:
                 # Tokenize the full prompt
                 full_prompt_tokens = tokenizer(full_prompt, return_tensors="pt").to(device)
                 # Get the logits
-                logits = model(full_prompt_tokens).logits
+                logits = model(**full_prompt_tokens).logits
                 # Get the loss
                 loss_fct = torch.nn.CrossEntropyLoss()
                 loss = loss_fct(logits.view(-1, logits.size(-1)), full_prompt_tokens.input_ids.view(-1))
