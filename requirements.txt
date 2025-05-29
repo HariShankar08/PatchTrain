@@ -6,3 +6,4 @@ evaluate>=0.4.0
 bitsandbytes>=0.39.0
 tqdm>=4.65.0
 huggingface-hub>=0.16.0 
+rouge-score>=0.1.2
