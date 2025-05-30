@@ -1,2 +1,3 @@
 # Ignore build artifacts and output files
 src/output/*
+src/outputs
