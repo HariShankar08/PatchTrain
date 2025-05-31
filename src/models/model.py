@@ -3,6 +3,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingA
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
 from config.config import ModelConfig
 from .patch_model import PatchTrainModel
+from typing import Union
 
 class ModelManager:
     def __init__(self, config: ModelConfig):
@@ -94,6 +95,8 @@ class ModelManager:
         patch_calculation_method: str = "paraMean",
         lambda_ratio: float = 2/3,
         num_epochs: int = 3,
+        patch_epochs: Union[int, None] = None,
+        standard_epochs: Union[int, None] = None,
         **trainer_kwargs
     ):
         """
@@ -115,8 +118,10 @@ class ModelManager:
             self.load_model_and_tokenizer()
             
         # Calculate number of epochs for each phase
-        patch_epochs = int(num_epochs * lambda_ratio)
-        standard_epochs = num_epochs - patch_epochs
+        if patch_epochs is None:
+            patch_epochs = int(num_epochs * lambda_ratio)
+        if standard_epochs is None:
+            standard_epochs = num_epochs - patch_epochs
         
         # Phase 1: Patch Training
         if patch_epochs > 0:
@@ -181,3 +186,96 @@ class ModelManager:
         """Save the LoRA adapters."""
         if self.model is not None:
             self.model.save_pretrained(path) 
+
+    def train_patch_peft(
+        self,
+        train_dataset,
+        eval_dataset=None,
+        patch_size: int = 4,
+        patch_calculation_method: str = "paraMean",
+        lambda_ratio: float = 2/3,
+        num_epochs: int = 3,
+        patch_epochs: Union[int, None] = None,
+        standard_epochs: Union[int, None] = None,
+        **trainer_kwargs
+    ):
+        """
+        Train a model using the patch training strategy with PEFT.
+        
+        This method implements a two-phase training approach:
+        1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs
+        2. Second phase: Train with patch_size=1 for the remaining epochs
+        
+        Args:
+            train_dataset: Training dataset
+            eval_dataset: Optional evaluation dataset
+            **trainer_kwargs: Additional arguments to pass to the Trainer
+        """
+        if self.model is None:
+            self.setup_lora()
+        
+        # Calculate number of epochs for each phase
+        if patch_epochs is None:
+            patch_epochs = int(num_epochs * lambda_ratio)
+        if standard_epochs is None:
+            standard_epochs = num_epochs - patch_epochs
+        
+        # Phase 1: Patch Training
+        if patch_epochs > 0:
+            print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
+            patch_model = PatchTrainModel(
+                self.model,
+                patch_size=patch_size,
+                patch_calculation_method=patch_calculation_method
+            )
+            
+            # Create training arguments for patch phase
+            patch_training_args = TrainingArguments(
+                num_train_epochs=patch_epochs,
+                **trainer_kwargs
+            )
+            
+            data_collator = DataCollatorForLanguageModeling(
+                tokenizer=self.tokenizer,
+                mlm=False
+            )
+            
+            # Train with patch model
+            trainer = Trainer(
+                model=patch_model,
+                args=patch_training_args,
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
+                data_collator=data_collator
+            )
+            trainer.train()
+            
+            # Get the trained model
+            self.model = patch_model.base_model
+        
+        # Phase 2: Standard Training
+        if standard_epochs > 0:
+            print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
+            standard_model = self.model
+            
+            # Create training arguments for standard phase
+            standard_training_args = TrainingArguments(
+                num_train_epochs=standard_epochs,
+                **trainer_kwargs
+            )
+            torch.cuda.empty_cache()
+            # Train with standard model
+            trainer = Trainer(
+                model=standard_model,
+                args=standard_training_args,
+                train_dataset=train_dataset,
+                eval_dataset=eval_dataset,
+                data_collator=data_collator
+            )
+            trainer.train()
+            
+            # Get the final trained model
+            self.model = standard_model
+            # self.model.save_pretrained('PT_model')
+        return trainer, self.model
+        
