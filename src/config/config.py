@@ -7,6 +7,7 @@ class RunMode(Enum):
     FULL_FINETUNE = "full_finetune"  # Full model finetuning
     LORA_FINETUNE = "lora_finetune"  # LoRA finetuning
     PATCH_TRAIN = "patch_train"
+    PATCH_PEFT = "patch_peft"
 
 @dataclass
 class RunConfig:
@@ -39,7 +40,7 @@ class TrainingConfig:
     save_strategy: str = "no"
 
 @dataclass
-class DataConfig:
+class GSM8kDataConfig:
     dataset_name: str = "gsm8k"
     prompt_template: str = "Question: {question}\nLet's think step by step to solve the problem.\nAnswer:"
     answer_template: str = " {answer}\nThe final answer is: {final_answer}"
@@ -50,3 +51,9 @@ class EvaluationConfig:
     max_new_tokens: int = 200
     temperature: float = 0.7
     do_sample: bool = True 
+
+@dataclass
+class TinyStoriesDataConfig:
+    dataset_name: str = "roneneldan/TinyStories"
+    prompt_template: str = "Generate a story: {text}"
+

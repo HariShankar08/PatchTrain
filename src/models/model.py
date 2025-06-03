@@ -97,6 +97,7 @@ class ModelManager:
         num_epochs: int = 3,
         patch_epochs: Union[int, None] = None,
         standard_epochs: Union[int, None] = None,
+        batch_size: int = 8,
         **trainer_kwargs
     ):
         """
@@ -135,6 +136,8 @@ class ModelManager:
             # Create training arguments for patch phase
             patch_training_args = TrainingArguments(
                 num_train_epochs=patch_epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
                 **trainer_kwargs
             )
             
@@ -164,6 +167,8 @@ class ModelManager:
             # Create training arguments for standard phase
             standard_training_args = TrainingArguments(
                 num_train_epochs=standard_epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
                 **trainer_kwargs
             )
             torch.cuda.empty_cache()
@@ -197,14 +202,15 @@ class ModelManager:
         num_epochs: int = 3,
         patch_epochs: Union[int, None] = None,
         standard_epochs: Union[int, None] = None,
+        batch_size: int = 8,
         **trainer_kwargs
     ):
         """
         Train a model using the patch training strategy with PEFT.
         
         This method implements a two-phase training approach:
-        1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs
-        2. Second phase: Train with patch_size=1 for the remaining epochs
+        1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs - or patch_epochs
+        2. Second phase: Train with patch_size=1 for the remaining epochs - or standard_epochs
         
         Args:
             train_dataset: Training dataset
@@ -232,6 +238,8 @@ class ModelManager:
             # Create training arguments for patch phase
             patch_training_args = TrainingArguments(
                 num_train_epochs=patch_epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
                 **trainer_kwargs
             )
             
@@ -261,6 +269,8 @@ class ModelManager:
             # Create training arguments for standard phase
             standard_training_args = TrainingArguments(
                 num_train_epochs=standard_epochs,
+                per_device_train_batch_size=batch_size,
+                per_device_eval_batch_size=batch_size,
                 **trainer_kwargs
             )
             torch.cuda.empty_cache()

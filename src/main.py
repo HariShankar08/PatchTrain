@@ -1,10 +1,11 @@
 import argparse
 import numpy as np
 from config.config import (
-    ModelConfig, TrainingConfig, DataConfig, EvaluationConfig,
+    ModelConfig, TrainingConfig, GSM8kDataConfig, 
+    EvaluationConfig, TinyStoriesDataConfig,
     RunConfig, RunMode
 )
-from data.dataset import GSM8KProcessor
+from data.dataset import GSM8KProcessor, TinyStoriesProcessor
 from models.model import ModelManager
 from training.trainer import ModelTrainer
 from evaluation.evaluator import ModelEvaluator
@@ -55,6 +56,35 @@ def parse_args():
         default=1,
         help="Number of training runs with different seeds"
     )
+
+    parser.add_argument(
+        "--patch_epochs",
+        type=int,
+        default=None,
+        help="Number of epochs to use patch training"
+    )
+
+    parser.add_argument(
+        "--standard_epochs",
+        type=int,
+        default=None,
+        help="Number of epochs to use standard training"
+    )
+
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="gsm8k",
+        help="Dataset to use for training"
+    )
+
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=8,
+        help="Batch size for training"
+    )
+    
     return parser.parse_args()
 
 def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
@@ -83,12 +113,15 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
     
     # Setup data processing
     print(f"\nSetting up data processing for run {seed}...")
-    data_processor = GSM8KProcessor(data_config)
+    if args.dataset == "gsm8k":
+        data_processor = GSM8KProcessor(data_config)
+    elif args.dataset == "tiny_stories":
+        data_processor = TinyStoriesProcessor(data_config)
+    else:
+        raise ValueError(f"Dataset {args.dataset} not supported")
     tokenized_dataset = data_processor.preprocess_dataset(None)  # We'll tokenize after model loading
     test_dataset_for_evaluate = tokenized_dataset["test"]
-    print(test_dataset_for_evaluate)
-    print(test_dataset_for_evaluate[0])
-    # exit()
+    
     # Setup model
     print(f"Setting up model for run {seed}...")
     model_manager = ModelManager(model_config)
@@ -119,7 +152,8 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 model=model,
                 train_dataset=train_dataset,
                 eval_dataset=test_dataset,
-                tokenizer=tokenizer
+                tokenizer=tokenizer,
+                batch_size=args.batch_size
             )
 
             # Train model
@@ -138,7 +172,8 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 model=model,
                 train_dataset=train_dataset,
                 eval_dataset=test_dataset,
-                tokenizer=tokenizer
+                tokenizer=tokenizer,
+                batch_size=args.batch_size
             )
 
             # Train model
@@ -167,9 +202,35 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 eval_strategy=training_config.eval_strategy,
                 eval_steps=training_config.eval_steps,
                 save_strategy=training_config.save_strategy,
+                patch_epochs=args.patch_epochs,
+                standard_epochs=args.standard_epochs,
+                batch_size=args.batch_size
             )
             
             trainer.save_model(f"{run_config.save_path}_seed{seed}")
+        
+        elif run_config.mode == RunMode.PATCH_PEFT:
+            print("Preparing for patch PEFT training...")
+            # Train with patch PEFT strategy
+            print(f"Starting patch PEFT training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
+            trainer, model = model_manager.train_patch_peft(
+                train_dataset=train_dataset,
+                eval_dataset=test_dataset,
+                lambda_ratio=args.lambda_ratio,
+                num_epochs=training_config.num_train_epochs,
+                learning_rate=training_config.learning_rate,
+                warmup_steps=training_config.warmup_steps,
+                gradient_accumulation_steps=training_config.gradient_accumulation_steps,
+                fp16=training_config.fp16,
+                bf16=training_config.bf16,
+                logging_steps=training_config.logging_steps,
+                eval_strategy=training_config.eval_strategy,
+                eval_steps=training_config.eval_steps,
+                save_strategy=training_config.save_strategy,
+                patch_epochs=args.patch_epochs,
+                standard_epochs=args.standard_epochs,
+                batch_size=args.batch_size
+            )
 
     # Evaluate model
     print(f"Evaluating model for run {seed}...")
@@ -196,7 +257,12 @@ def main():
     )
     model_config = ModelConfig()
     training_config = TrainingConfig()
-    data_config = DataConfig()
+    if args.dataset == "gsm8k":
+        data_config = GSM8kDataConfig()
+    elif args.dataset == "tiny_stories":
+        data_config = TinyStoriesDataConfig()
+    else:
+        raise ValueError(f"Dataset {args.dataset} not supported")
     eval_config = EvaluationConfig()
 
     # Run multiple training iterations

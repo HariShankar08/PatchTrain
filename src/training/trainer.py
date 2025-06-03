@@ -5,7 +5,7 @@ class ModelTrainer:
     def __init__(self, config: TrainingConfig):
         self.config = config
 
-    def setup_trainer(self, model, train_dataset, eval_dataset, tokenizer):
+    def setup_trainer(self, model, train_dataset, eval_dataset, tokenizer, batch_size):
         """Setup the Hugging Face Trainer with the specified configuration."""
         training_args = TrainingArguments(
             output_dir=self.config.output_dir,
@@ -19,6 +19,8 @@ class ModelTrainer:
             logging_steps=self.config.logging_steps,
             eval_strategy=self.config.eval_strategy,
             eval_steps=self.config.eval_steps,
+            per_device_eval_batch_size=batch_size,
+            per_device_train_batch_size=batch_size,
             # save_strategy=self.config.save_strategy,
         )
 
