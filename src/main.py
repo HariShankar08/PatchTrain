@@ -19,7 +19,7 @@ def parse_args():
         type=str,
         choices=[mode.value for mode in RunMode],
         default=RunMode.LORA_FINETUNE.value,
-        help="Execution mode: evaluate, full_finetune, lora_finetune, or patch_train"
+        help="Execution mode: evaluate, full_finetune, lora_finetune, patch_train, or patch_peft"
     )
     parser.add_argument(
         "--model_path",
@@ -44,10 +44,17 @@ def parse_args():
         help="Size of patches for patch training"
     )
     parser.add_argument(
+        "--patch_method",
+        type=str,
+        choices=["mean", "paraMean"],
+        default="mean",
+        help="Method to use for patch calculation"
+    )
+    parser.add_argument(
         "--lambda_ratio",
         type=float,
         default=2/3,
-        help="Ratio of epochs to use patch training (e.g., 2/3 means use patch training for 2/3 of epochs)"
+        help="Ratio of training batches to use patch training"
     )
     parser.add_argument(
         "--num_runs",
@@ -55,21 +62,18 @@ def parse_args():
         default=1,
         help="Number of training runs with different seeds"
     )
-
     parser.add_argument(
         "--patch_epochs",
         type=int,
         default=None,
         help="Number of epochs to use patch training"
     )
-
     parser.add_argument(
         "--standard_epochs",
         type=int,
         default=None,
         help="Number of epochs to use standard training"
     )
-
     parser.add_argument(
         "--dataset",
         type=str,
@@ -77,7 +81,6 @@ def parse_args():
         choices=["cnn", "wmt_hi", "wmt_fr"],
         help="Dataset to use for training"
     )
-    
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -241,6 +244,8 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             trainer, model = model_manager.train_patch_peft(
                 train_dataset=train_dataset,
                 eval_dataset=val_dataset,  # Use validation set during training
+                patch_size=args.patch_size,
+                patch_calculation_method=args.patch_method,
                 lambda_ratio=args.lambda_ratio,
                 num_epochs=training_config.num_train_epochs,
                 learning_rate=training_config.learning_rate,
@@ -256,6 +261,10 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 standard_epochs=args.standard_epochs,
                 batch_size=args.batch_size
             )
+            
+            # Save the PEFT model
+            print(f"Saving PEFT model to {run_config.save_path}...")
+            model_manager.save_adapters(f'{run_config.save_path}_seed{seed}')
 
     # Final evaluation on test set
     print(f"Evaluating model on test set for run {seed}...")
