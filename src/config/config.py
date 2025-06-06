@@ -18,8 +18,8 @@ class RunConfig:
 
 @dataclass
 class ModelConfig:
-    model_name: str = "facebook/opt-350m"
-    use_4bit: bool = True
+    model_name: str = "google/gemma-3-4b-it"
+    use_4bit: bool = False
     lora_rank: int = 8
     max_seq_length: int = 512
     batch_size: int = 8
@@ -40,20 +40,16 @@ class TrainingConfig:
     save_strategy: str = "no"
 
 @dataclass
-class GSM8kDataConfig:
-    dataset_name: str = "gsm8k"
-    prompt_template: str = "Question: {question}\nLet's think step by step to solve the problem.\nAnswer:"
-    answer_template: str = " {answer}\nThe final answer is: {final_answer}"
+class DatasetConfig:
+    dataset_name: str
+    subset: Optional[str] = None
+    prompt_template: str
+    answer_template: str
 
 @dataclass
 class EvaluationConfig:
     num_samples: int = 50
     max_new_tokens: int = 200
     temperature: float = 0.7
-    do_sample: bool = True 
-
-@dataclass
-class TinyStoriesDataConfig:
-    dataset_name: str = "roneneldan/TinyStories"
-    prompt_template: str = "Generate a story: {text}"
+    do_sample: bool = True
 

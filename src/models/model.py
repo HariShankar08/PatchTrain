@@ -123,6 +123,10 @@ class ModelManager:
             patch_epochs = int(num_epochs * lambda_ratio)
         if standard_epochs is None:
             standard_epochs = num_epochs - patch_epochs
+
+        total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
+        patch_steps = int(total_batches * lambda_ratio)
+        standard_steps = total_batches - patch_steps
         
         # Phase 1: Patch Training
         if patch_epochs > 0:
@@ -138,6 +142,7 @@ class ModelManager:
                 num_train_epochs=patch_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
+                max_steps=patch_steps,
                 **trainer_kwargs
             )
             
@@ -169,6 +174,7 @@ class ModelManager:
                 num_train_epochs=standard_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
+                max_steps=standard_steps,
                 **trainer_kwargs
             )
             torch.cuda.empty_cache()
@@ -197,7 +203,7 @@ class ModelManager:
         train_dataset,
         eval_dataset=None,
         patch_size: int = 4,
-        patch_calculation_method: str = "paraMean",
+        patch_calculation_method: str = "mean",
         lambda_ratio: float = 2/3,
         num_epochs: int = 3,
         patch_epochs: Union[int, None] = None,
@@ -225,6 +231,10 @@ class ModelManager:
             patch_epochs = int(num_epochs * lambda_ratio)
         if standard_epochs is None:
             standard_epochs = num_epochs - patch_epochs
+
+        total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
+        patch_steps = int(total_batches * lambda_ratio)
+        standard_steps = total_batches - patch_steps
         
         # Phase 1: Patch Training
         if patch_epochs > 0:
@@ -240,6 +250,7 @@ class ModelManager:
                 num_train_epochs=patch_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
+                max_steps=patch_steps,
                 **trainer_kwargs
             )
             
@@ -271,6 +282,7 @@ class ModelManager:
                 num_train_epochs=standard_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
+                max_steps=standard_steps,
                 **trainer_kwargs
             )
             torch.cuda.empty_cache()
@@ -288,4 +300,7 @@ class ModelManager:
             self.model = standard_model
             # self.model.save_pretrained('PT_model')
         return trainer, self.model
+
+    def calculate_total_batches(self, train_dataset, batch_size, gradient_accumulation_steps):
+        return len(train_dataset) // (batch_size * gradient_accumulation_steps)
         

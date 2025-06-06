@@ -1,11 +1,10 @@
 import argparse
 import numpy as np
 from config.config import (
-    ModelConfig, TrainingConfig, GSM8kDataConfig, 
-    EvaluationConfig, TinyStoriesDataConfig,
-    RunConfig, RunMode
+    ModelConfig, TrainingConfig, DatasetConfig, 
+    EvaluationConfig, RunConfig, RunMode
 )
-from data.dataset import GSM8KProcessor, TinyStoriesProcessor
+from data.dataset import CNNProcessor, WMTProcessor
 from models.model import ModelManager
 from training.trainer import ModelTrainer
 from evaluation.evaluator import ModelEvaluator
@@ -14,7 +13,7 @@ import torch
 from transformers import set_seed
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="GSM-8K Model Training and Evaluation")
+    parser = argparse.ArgumentParser(description="Model Training and Evaluation")
     parser.add_argument(
         "--mode",
         type=str,
@@ -74,10 +73,11 @@ def parse_args():
     parser.add_argument(
         "--dataset",
         type=str,
-        default="gsm8k",
+        default="cnn",
+        choices=["cnn", "wmt_hi", "wmt_fr"],
         help="Dataset to use for training"
     )
-
+    
     parser.add_argument(
         "--batch_size",
         type=int,
@@ -86,6 +86,31 @@ def parse_args():
     )
     
     return parser.parse_args()
+
+def get_dataset_config(args):
+    """Get the appropriate dataset configuration based on the dataset argument."""
+    if args.dataset == "cnn":
+        return DatasetConfig(
+            dataset_name="abisee/cnn_dailymail",
+            prompt_template="Summarize the following article:\n{article}\n\nSummary:",
+            answer_template="{highlights}"
+        )
+    elif args.dataset == "wmt_hi":
+        return DatasetConfig(
+            dataset_name="wmt14",
+            subset="hi-en",
+            prompt_template="Translate from Hindi to English:\n{source_text}\n\nEnglish:",
+            answer_template="{target_text}"
+        )
+    elif args.dataset == "wmt_fr":
+        return DatasetConfig(
+            dataset_name="wmt14",
+            subset="fr-en",
+            prompt_template="Translate from French to English:\n{source_text}\n\nEnglish:",
+            answer_template="{target_text}"
+        )
+    else:
+        raise ValueError(f"Dataset {args.dataset} not supported")
 
 def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
     """Helper function to evaluate model."""
@@ -113,14 +138,15 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
     
     # Setup data processing
     print(f"\nSetting up data processing for run {seed}...")
-    if args.dataset == "gsm8k":
-        data_processor = GSM8KProcessor(data_config)
-    elif args.dataset == "tiny_stories":
-        data_processor = TinyStoriesProcessor(data_config)
+    if args.dataset == "cnn":
+        data_processor = CNNProcessor(data_config)
+    elif args.dataset in ["wmt_hi", "wmt_fr"]:
+        data_processor = WMTProcessor(data_config)
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")
+    
     tokenized_dataset = data_processor.preprocess_dataset(None)  # We'll tokenize after model loading
-    test_dataset_for_evaluate = tokenized_dataset["test"]
+    test_dataset = tokenized_dataset["test"]  # Always use test split for evaluation
     
     # Setup model
     print(f"Setting up model for run {seed}...")
@@ -134,12 +160,11 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
         # Load base model
         model, tokenizer = model_manager.load_model_and_tokenizer()
 
-
     if not run_config.eval_only:
         # Retokenize dataset with the correct tokenizer
         tokenized_dataset = data_processor.preprocess_dataset(tokenizer)
         train_dataset = tokenized_dataset["train"]
-        test_dataset = tokenized_dataset["test"]
+        val_dataset = tokenized_dataset["validation"]  # Use validation for training evaluation
 
         if run_config.mode == RunMode.LORA_FINETUNE:
             print(f"Setting up LoRA for run {seed}...")
@@ -151,7 +176,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             trainer = trainer_manager.setup_trainer(
                 model=model,
                 train_dataset=train_dataset,
-                eval_dataset=test_dataset,
+                eval_dataset=val_dataset,  # Use validation set during training
                 tokenizer=tokenizer,
                 batch_size=args.batch_size
             )
@@ -171,7 +196,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             trainer = trainer_manager.setup_trainer(
                 model=model,
                 train_dataset=train_dataset,
-                eval_dataset=test_dataset,
+                eval_dataset=val_dataset,  # Use validation set during training
                 tokenizer=tokenizer,
                 batch_size=args.batch_size
             )
@@ -189,7 +214,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             print(f"Starting patch training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
             trainer, model = model_manager.train_patch_model(
                 train_dataset=train_dataset,
-                eval_dataset=test_dataset,
+                eval_dataset=val_dataset,  # Use validation set during training
                 patch_size=args.patch_size,
                 lambda_ratio=args.lambda_ratio,
                 num_epochs=training_config.num_train_epochs,
@@ -215,7 +240,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             print(f"Starting patch PEFT training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
             trainer, model = model_manager.train_patch_peft(
                 train_dataset=train_dataset,
-                eval_dataset=test_dataset,
+                eval_dataset=val_dataset,  # Use validation set during training
                 lambda_ratio=args.lambda_ratio,
                 num_epochs=training_config.num_train_epochs,
                 learning_rate=training_config.learning_rate,
@@ -232,12 +257,12 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 batch_size=args.batch_size
             )
 
-    # Evaluate model
-    print(f"Evaluating model for run {seed}...")
+    # Final evaluation on test set
+    print(f"Evaluating model on test set for run {seed}...")
     metrics = evaluate_model(
         model=model,
         tokenizer=tokenizer,
-        test_dataset=test_dataset_for_evaluate,
+        test_dataset=test_dataset,  # Use test set for final evaluation
         eval_config=eval_config,
         device=model_manager.device
     )
@@ -248,30 +273,31 @@ def main():
     # Parse command line arguments
     args = parse_args()
     
-    # Initialize configurations
+    # Create configurations
     run_config = RunConfig(
         mode=RunMode(args.mode),
         model_path=args.model_path,
         save_path=args.save_path,
         eval_only=args.eval_only
     )
+    
     model_config = ModelConfig()
     training_config = TrainingConfig()
-    if args.dataset == "gsm8k":
-        data_config = GSM8kDataConfig()
-    elif args.dataset == "tiny_stories":
-        data_config = TinyStoriesDataConfig()
-    else:
-        raise ValueError(f"Dataset {args.dataset} not supported")
+    data_config = get_dataset_config(args)
     eval_config = EvaluationConfig()
-
-    # Run multiple training iterations
+    
+    # Run training iterations
     all_metrics = []
     for i in range(args.num_runs):
         seed = i  # Use different seeds for each run
         metrics = run_training_iteration(
-            run_config, model_config, training_config, 
-            data_config, eval_config, seed, args
+            run_config=run_config,
+            model_config=model_config,
+            training_config=training_config,
+            data_config=data_config,
+            eval_config=eval_config,
+            seed=seed,
+            args=args
         )
         all_metrics.append(metrics)
         
