@@ -5,7 +5,7 @@ from enum import Enum
 class RunMode(Enum):
     EVALUATE = "evaluate"  # Only evaluate a pretrained model
     FULL_FINETUNE = "full_finetune"  # Full model finetuning
-    LORA_FINETUNE = "lora_finetune"  # LoRA finetuning
+    LORA_ FINETUNE = "lora_finetune"  # LoRA finetuning
     PATCH_TRAIN = "patch_train"  # Patch training
     PATCH_PEFT = "patch_peft"  # Patch training with PEFT (LoRA)
 
@@ -42,9 +42,10 @@ class TrainingConfig:
 @dataclass
 class DatasetConfig:
     dataset_name: str
-    subset: Optional[str] = None
     prompt_template: str
     answer_template: str
+    subset: Optional[str] = None
+    
 
 @dataclass
 class EvaluationConfig:
