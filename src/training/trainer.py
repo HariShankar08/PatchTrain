@@ -80,9 +80,16 @@ class ModelTrainer:
                 resume="allow"
             )
             
-            # Log initial GPU memory state
+            # Define GPU memory metrics as charts
+            wandb.define_metric("gpu_memory/allocated_gb", display="line")
+            wandb.define_metric("gpu_memory/reserved_gb", display="line")
+            wandb.define_metric("gpu_memory/max_allocated_gb", display="line")
+            wandb.define_metric("cpu/percent", display="line")
+            wandb.define_metric("cpu/memory_gb", display="line")
+            
+            # Log initial GPU memory state as a summary
             if torch.cuda.is_available():
-                wandb.log({
+                wandb.run.summary.update({
                     'gpu_info/device_name': torch.cuda.get_device_name(0),
                     'gpu_info/device_count': torch.cuda.device_count(),
                     'gpu_info/initial_memory_gb': torch.cuda.memory_allocated() / 1024**3
