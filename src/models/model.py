@@ -127,6 +127,9 @@ class ModelManager:
         total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
         patch_steps = int(total_batches * lambda_ratio)
         standard_steps = total_batches - patch_steps
+
+        patch_steps = patch_steps * num_epochs
+        standard_steps = standard_steps * num_epochs
         
         # Phase 1: Patch Training
         if patch_epochs > 0:
@@ -139,7 +142,7 @@ class ModelManager:
             
             # Create training arguments for patch phase
             patch_training_args = TrainingArguments(
-                num_train_epochs=patch_epochs,
+                num_train_epochs=num_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
                 max_steps=patch_steps,
@@ -171,7 +174,7 @@ class ModelManager:
             
             # Create training arguments for standard phase
             standard_training_args = TrainingArguments(
-                num_train_epochs=standard_epochs,
+                num_train_epochs=num_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
                 max_steps=standard_steps,
@@ -235,6 +238,9 @@ class ModelManager:
         total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
         patch_steps = int(total_batches * lambda_ratio)
         standard_steps = total_batches - patch_steps
+
+        patch_steps = patch_steps * num_epochs
+        standard_steps = standard_steps * num_epochs
         
         # Phase 1: Patch Training
         if patch_epochs > 0:
@@ -247,7 +253,7 @@ class ModelManager:
             
             # Create training arguments for patch phase
             patch_training_args = TrainingArguments(
-                num_train_epochs=patch_epochs,
+                num_train_epochs=num_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
                 max_steps=patch_steps,
@@ -279,7 +285,7 @@ class ModelManager:
             
             # Create training arguments for standard phase
             standard_training_args = TrainingArguments(
-                num_train_epochs=standard_epochs,
+                num_train_epochs=num_epochs,
                 per_device_train_batch_size=batch_size,
                 per_device_eval_batch_size=batch_size,
                 max_steps=standard_steps,
