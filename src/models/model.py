@@ -29,7 +29,7 @@ class ModelManager:
                 self.model = PeftModel.from_pretrained(
                     AutoModelForCausalLM.from_pretrained(
                         self.config.model_name,
-                        device_map="auto",
+                        # device_map="auto",
                         torch_dtype=torch.bfloat16,
                     ),
                     model_path
@@ -38,7 +38,7 @@ class ModelManager:
                 # If not a PEFT model, load as regular model
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_path,
-                    device_map="auto",
+                    # device_map="auto",
                     torch_dtype=torch.bfloat16,
                 )
         else:
@@ -46,13 +46,13 @@ class ModelManager:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
                     load_in_4bit=True,
-                    device_map="auto",
+                    # device_map="auto",
                     torch_dtype=torch.bfloat16,
                 )
             else:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    device_map="auto",
+                    # device_map="auto",
                     torch_dtype=torch.bfloat16,
                 )
 
