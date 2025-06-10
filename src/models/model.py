@@ -293,10 +293,6 @@ class ModelManager:
                     **trainer_kwargs
                 }
                 
-                data_collator = DataCollatorForLanguageModeling(
-                    tokenizer=self.tokenizer,
-                    mlm=False
-                )
                 
                 # Train with patch model
                 trainer = trainer_manager.setup_trainer(
@@ -304,7 +300,6 @@ class ModelManager:
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
-                    data_collator=data_collator,
                     batch_size=batch_size,
                     training_stage="patch_phase_peft",
                 )
