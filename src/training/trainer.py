@@ -77,15 +77,28 @@ class ModelTrainer:
                 entity=self.config.wandb_entity,
                 name=run_name,
                 group=self.config.wandb_group,
-                resume="allow"
+                resume="allow",
+                # Configure custom charts
+                config={
+                    "custom_charts": {
+                        "gpu_memory": {
+                            "metrics": ["gpu_memory/allocated_gb", "gpu_memory/reserved_gb", "gpu_memory/max_allocated_gb"],
+                            "title": "GPU Memory Usage"
+                        },
+                        "cpu_usage": {
+                            "metrics": ["cpu/percent", "cpu/memory_gb"],
+                            "title": "CPU Usage"
+                        }
+                    }
+                }
             )
             
-            # Define GPU memory metrics as charts
-            wandb.define_metric("gpu_memory/allocated_gb", display="line")
-            wandb.define_metric("gpu_memory/reserved_gb", display="line")
-            wandb.define_metric("gpu_memory/max_allocated_gb", display="line")
-            wandb.define_metric("cpu/percent", display="line")
-            wandb.define_metric("cpu/memory_gb", display="line")
+            # Define metrics for step alignment
+            wandb.define_metric("gpu_memory/allocated_gb", step_metric="train/global_step")
+            wandb.define_metric("gpu_memory/reserved_gb", step_metric="train/global_step")
+            wandb.define_metric("gpu_memory/max_allocated_gb", step_metric="train/global_step")
+            wandb.define_metric("cpu/percent", step_metric="train/global_step")
+            wandb.define_metric("cpu/memory_gb", step_metric="train/global_step")
             
             # Log initial GPU memory state as a summary
             if torch.cuda.is_available():
