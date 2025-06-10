@@ -225,6 +225,7 @@ class ModelManager:
         patch_epochs: Union[int, None] = None,
         standard_epochs: Union[int, None] = None,
         batch_size: int = 8,
+        training_config: Optional[TrainingConfig] = None,
         **trainer_kwargs
     ):
         """
@@ -255,7 +256,10 @@ class ModelManager:
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
         
-        trainer_manager = ModelTrainer(self.config)
+        if training_config is None:
+            training_config = TrainingConfig()
+
+        trainer_manager = ModelTrainer(training_config)
         
         try:
             # Phase 1: Patch Training
@@ -288,7 +292,7 @@ class ModelManager:
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="patch_phase"
+                    training_stage="patch_phase",
                 )
                 trainer.train()
                 
@@ -316,7 +320,7 @@ class ModelManager:
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="standard_phase"
+                    training_stage="standard_phase",
                 )
                 trainer.train()
                 
