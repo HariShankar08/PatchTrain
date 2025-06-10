@@ -51,6 +51,8 @@ class ModelTrainer:
             eval_steps=self.config.eval_steps,
             per_device_eval_batch_size=batch_size,
             per_device_train_batch_size=batch_size,
+            # Disable saving checkpoints during training
+            save_strategy="no",
             # Enable wandb logging
             report_to="wandb" if self.config.use_wandb else None,
         )

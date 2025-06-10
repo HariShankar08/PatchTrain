@@ -224,7 +224,11 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 training_config=training_config
             )
             
-            trainer.save_model(f"{run_config.save_path}_seed{seed}")
+            # Save only the base model to avoid weight sharing issues
+            if hasattr(model, 'base_model'):
+                model.base_model.save_pretrained(f"{run_config.save_path}_seed{seed}")
+            else:
+                model.save_pretrained(f"{run_config.save_path}_seed{seed}")
         
         elif run_config.mode == RunMode.PATCH_PEFT:
             print("Preparing for patch PEFT training...")
