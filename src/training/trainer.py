@@ -9,7 +9,6 @@ class ModelTrainer:
         """Setup the Hugging Face Trainer with the specified configuration."""
         training_args = TrainingArguments(
             output_dir=self.config.output_dir,
-            per_device_train_batch_size=4,  # This should come from model config
             gradient_accumulation_steps=self.config.gradient_accumulation_steps,
             warmup_steps=self.config.warmup_steps,
             num_train_epochs=self.config.num_train_epochs,
