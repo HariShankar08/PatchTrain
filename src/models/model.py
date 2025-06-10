@@ -1,9 +1,9 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
-from config.config import ModelConfig
+from config.config import ModelConfig, TrainingConfig
 from .patch_model import PatchTrainModel
-from typing import Union
+from typing import Union, Optional
 from training.trainer import ModelTrainer
 
 class ModelManager:
@@ -98,18 +98,28 @@ class ModelManager:
         patch_epochs: Union[int, None] = None,
         standard_epochs: Union[int, None] = None,
         batch_size: int = 8,
+        training_config: Optional[TrainingConfig] = None,
         **trainer_kwargs
     ):
         """
         Train a model using the patch training strategy.
         
-        This method implements a two-phase training approach:
-        1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs
-        2. Second phase: Train with patch_size=1 for the remaining epochs
+        Args:
+            train_dataset: Training dataset
+            eval_dataset: Optional evaluation dataset
+            patch_size: Size of patches for patch training
+            patch_calculation_method: Method to calculate patch values
+            lambda_ratio: Ratio of training to use patch training
+            num_epochs: Total number of epochs
+            patch_epochs: Number of epochs for patch training (overrides lambda_ratio)
+            standard_epochs: Number of epochs for standard training (overrides lambda_ratio)
+            batch_size: Batch size for training
+            training_config: Configuration for training (if None, a default config will be used)
+            **trainer_kwargs: Additional arguments to pass to the Trainer
         """
-        if self.model is None:
-            self.load_model_and_tokenizer()
-            
+        if training_config is None:
+            training_config = TrainingConfig()
+
         # Calculate number of epochs for each phase
         if patch_epochs is None:
             patch_epochs = int(num_epochs * lambda_ratio)
@@ -123,7 +133,7 @@ class ModelManager:
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
         
-        trainer_manager = ModelTrainer(self.config)
+        trainer_manager = ModelTrainer(training_config)
         
         try:
             # Phase 1: Patch Training

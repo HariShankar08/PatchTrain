@@ -211,27 +211,17 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             trainer.save_model(f'{run_config.save_path}_seed{seed}')
             
         elif run_config.mode == RunMode.PATCH_TRAIN:
-            print("Preparing for patch training...")
-            # Train with patch strategy
-            print(f"Starting patch training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
+            print(f"Starting patch training for run {seed}...")
             trainer, model = model_manager.train_patch_model(
                 train_dataset=train_dataset,
-                eval_dataset=val_dataset,  # Use validation set during training
+                eval_dataset=val_dataset,
                 patch_size=args.patch_size,
+                patch_calculation_method=args.patch_method,
                 lambda_ratio=args.lambda_ratio,
-                num_epochs=training_config.num_train_epochs,
-                learning_rate=training_config.learning_rate,
-                warmup_steps=training_config.warmup_steps,
-                gradient_accumulation_steps=training_config.gradient_accumulation_steps,
-                fp16=training_config.fp16,
-                bf16=training_config.bf16,
-                logging_steps=training_config.logging_steps,
-                eval_strategy=training_config.eval_strategy,
-                eval_steps=training_config.eval_steps,
-                save_strategy=training_config.save_strategy,
                 patch_epochs=args.patch_epochs,
                 standard_epochs=args.standard_epochs,
-                batch_size=args.batch_size
+                batch_size=args.batch_size,
+                training_config=training_config
             )
             
             trainer.save_model(f"{run_config.save_path}_seed{seed}")
