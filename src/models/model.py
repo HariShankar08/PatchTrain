@@ -127,12 +127,15 @@ class ModelManager:
             standard_epochs = num_epochs - patch_epochs
 
         total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
+        print(f"Total batches: {total_batches * num_epochs}")
         patch_steps = int(total_batches * lambda_ratio)
         standard_steps = total_batches - patch_steps
 
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
-        
+        print(f"Patch steps: {patch_steps}")
+        print(f"Standard steps: {standard_steps}")
+        print(f'Both equal: {patch_steps == standard_steps}')
         trainer_manager = ModelTrainer(training_config)
         
         try:
