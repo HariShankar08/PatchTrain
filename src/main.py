@@ -115,14 +115,13 @@ def get_dataset_config(args):
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")
 
-def evaluate_model(model, tokenizer, test_dataset, eval_config, device):
+def evaluate_model(model, tokenizer, test_dataset, eval_config):
     """Helper function to evaluate model."""
     evaluator = ModelEvaluator(eval_config)
     metrics, predictions, references = evaluator.evaluate_model(
         model=model,
         tokenizer=tokenizer,
-        dataset=test_dataset,
-        device=device
+        dataset=test_dataset
     )
     return metrics
 
@@ -272,8 +271,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
         model=model,
         tokenizer=tokenizer,
         test_dataset=test_dataset,  # Use test set for final evaluation
-        eval_config=eval_config,
-        device=model_manager.device
+        eval_config=eval_config
     )
     
     return metrics

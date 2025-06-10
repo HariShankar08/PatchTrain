@@ -5,6 +5,7 @@ from config.config import EvaluationConfig
 import numpy as np
 from math import exp
 from tqdm import tqdm
+import math
 
 class ModelEvaluator:
     def __init__(self, config: EvaluationConfig):
@@ -46,7 +47,7 @@ class ModelEvaluator:
             use_stemmer=True
         )
 
-    def evaluate_model(self, model, tokenizer, dataset, device: str):
+    def evaluate_model(self, model, tokenizer, dataset):
         """Evaluate the model on the test dataset."""
         model.eval()
         predictions: List[str] = []
@@ -70,7 +71,8 @@ class ModelEvaluator:
             # Format as chat and tokenize
             messages = self.format_as_conversation(user_prompt)
             chat_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            inputs = tokenizer(chat_text, return_tensors="pt").to(device)
+            inputs = tokenizer(chat_text, return_tensors="pt")
+            inputs = {k: v for k, v in inputs.items()}  # Move to appropriate device based on model's device_map
             
             references.append(reference)
             
@@ -89,7 +91,8 @@ class ModelEvaluator:
                 # Calculate perplexity
                 full_messages = self.format_as_conversation(user_prompt, reference)
                 full_chat_text = tokenizer.apply_chat_template(full_messages, tokenize=False)
-                full_inputs = tokenizer(full_chat_text, return_tensors="pt").to(device)
+                full_inputs = tokenizer(full_chat_text, return_tensors="pt")
+                full_inputs = {k: v for k, v in full_inputs.items()}  # Move to appropriate device based on model's device_map
                 
                 # Get the logits
                 logits = model(**full_inputs).logits
@@ -117,16 +120,9 @@ class ModelEvaluator:
         
         # Calculate average perplexity
         avg_loss = np.mean(all_losses)
-        avg_perplexity = exp(avg_loss)
+        task_metrics["perplexity"] = math.exp(avg_loss)
         
-        # Combine all metrics
-        metrics = {
-            **task_metrics,
-            "perplexity": avg_perplexity,
-            "loss": avg_loss
-        }
-
-        return metrics, predictions, references
+        return task_metrics, predictions, references
 
     def print_examples(self, predictions: List[str], references: List[str], num_examples: int = 3):
         """Print example predictions and their references."""

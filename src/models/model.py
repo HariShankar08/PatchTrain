@@ -4,13 +4,11 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, Pe
 from config.config import ModelConfig
 from .patch_model import PatchTrainModel
 from typing import Union
+from training.trainer import ModelTrainer
 
 class ModelManager:
     def __init__(self, config: ModelConfig):
         self.config = config
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        if torch.backends.mps.is_available():
-            self.device = "mps"
         self.model = None
         self.tokenizer = None
 
@@ -53,8 +51,10 @@ class ModelManager:
                 )
             else:
                 self.model = AutoModelForCausalLM.from_pretrained(
-                    self.config.model_name
-                ).to(self.device)
+                    self.config.model_name,
+                    device_map="auto",
+                    torch_dtype=torch.bfloat16,
+                )
 
         return self.model, self.tokenizer
 
@@ -106,14 +106,6 @@ class ModelManager:
         This method implements a two-phase training approach:
         1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs
         2. Second phase: Train with patch_size=1 for the remaining epochs
-        
-        Args:
-            train_dataset: Training dataset
-            eval_dataset: Optional evaluation dataset
-            patch_size: Size of patches for the first phase of training
-            lambda_ratio: Ratio of epochs to use patch training (e.g., 2/3 means use patch training for 2/3 of epochs)
-            num_epochs: Total number of training epochs
-            **trainer_kwargs: Additional arguments to pass to the Trainer
         """
         if self.model is None:
             self.load_model_and_tokenizer()
@@ -131,70 +123,78 @@ class ModelManager:
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
         
-        # Phase 1: Patch Training
-        if patch_epochs > 0:
-            print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
-            patch_model = PatchTrainModel(
-                self.model,
-                patch_size=patch_size,
-                patch_calculation_method=patch_calculation_method
-            )
-            
-            # Create training arguments for patch phase
-            patch_training_args = TrainingArguments(
-                num_train_epochs=num_epochs,
-                per_device_train_batch_size=batch_size,
-                per_device_eval_batch_size=batch_size,
-                max_steps=patch_steps,
-                **trainer_kwargs
-            )
-            
-            data_collator = DataCollatorForLanguageModeling(
-                tokenizer=self.tokenizer,
-                mlm=False
-            )
-            
-            # Train with patch model
-            trainer = Trainer(
-                model=patch_model,
-                args=patch_training_args,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                data_collator=data_collator
-            )
-            trainer.train()
-            
-            # Get the trained model
-            self.model = patch_model.base_model
+        trainer_manager = ModelTrainer(self.config)
         
-        # Phase 2: Standard Training
-        if standard_epochs > 0:
-            print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
-            standard_model = self.model
+        try:
+            # Phase 1: Patch Training
+            if patch_epochs > 0:
+                print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
+                patch_model = PatchTrainModel(
+                    self.model,
+                    patch_size=patch_size,
+                    patch_calculation_method=patch_calculation_method
+                )
+                
+                # Create training arguments for patch phase
+                patch_training_args = {
+                    "num_train_epochs": num_epochs,
+                    "per_device_train_batch_size": batch_size,
+                    "per_device_eval_batch_size": batch_size,
+                    "max_steps": patch_steps,
+                    **trainer_kwargs
+                }
+                
+                data_collator = DataCollatorForLanguageModeling(
+                    tokenizer=self.tokenizer,
+                    mlm=False
+                )
+                
+                # Train with patch model
+                trainer = trainer_manager.setup_trainer(
+                    model=patch_model,
+                    train_dataset=train_dataset,
+                    eval_dataset=eval_dataset,
+                    tokenizer=self.tokenizer,
+                    batch_size=batch_size,
+                    training_stage="patch_phase"
+                )
+                trainer.train()
+                
+                # Get the trained model
+                self.model = patch_model.base_model
             
-            # Create training arguments for standard phase
-            standard_training_args = TrainingArguments(
-                num_train_epochs=num_epochs,
-                per_device_train_batch_size=batch_size,
-                per_device_eval_batch_size=batch_size,
-                max_steps=standard_steps,
-                **trainer_kwargs
-            )
-            torch.cuda.empty_cache()
-            # Train with standard model
-            trainer = Trainer(
-                model=standard_model,
-                args=standard_training_args,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                data_collator=data_collator
-            )
-            trainer.train()
+            # Phase 2: Standard Training
+            if standard_epochs > 0:
+                print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
+                standard_model = self.model
+                
+                # Create training arguments for standard phase
+                standard_training_args = {
+                    "num_train_epochs": num_epochs,
+                    "per_device_train_batch_size": batch_size,
+                    "per_device_eval_batch_size": batch_size,
+                    "max_steps": standard_steps,
+                    **trainer_kwargs
+                }
+                torch.cuda.empty_cache()
+                # Train with standard model
+                trainer = trainer_manager.setup_trainer(
+                    model=standard_model,
+                    train_dataset=train_dataset,
+                    eval_dataset=eval_dataset,
+                    tokenizer=self.tokenizer,
+                    batch_size=batch_size,
+                    training_stage="standard_phase"
+                )
+                trainer.train()
+                
+                # Get the final trained model
+                self.model = standard_model
             
-            # Get the final trained model
-            self.model = standard_model
-            # self.model.save_pretrained('PT_model')
-        return trainer, self.model
+            return trainer, self.model
+        finally:
+            # Make sure to finish the wandb run
+            trainer_manager.finish_wandb()
 
     def save_adapters(self, path: str):
         """Save the LoRA adapters."""
@@ -242,70 +242,78 @@ class ModelManager:
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
         
-        # Phase 1: Patch Training
-        if patch_epochs > 0:
-            print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
-            patch_model = PatchTrainModel(
-                self.model,
-                patch_size=patch_size,
-                patch_calculation_method=patch_calculation_method
-            )
-            
-            # Create training arguments for patch phase
-            patch_training_args = TrainingArguments(
-                num_train_epochs=num_epochs,
-                per_device_train_batch_size=batch_size,
-                per_device_eval_batch_size=batch_size,
-                max_steps=patch_steps,
-                **trainer_kwargs
-            )
-            
-            data_collator = DataCollatorForLanguageModeling(
-                tokenizer=self.tokenizer,
-                mlm=False
-            )
-            
-            # Train with patch model
-            trainer = Trainer(
-                model=patch_model,
-                args=patch_training_args,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                data_collator=data_collator
-            )
-            trainer.train()
-            
-            # Get the trained model
-            self.model = patch_model.base_model
+        trainer_manager = ModelTrainer(self.config)
         
-        # Phase 2: Standard Training
-        if standard_epochs > 0:
-            print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
-            standard_model = self.model
+        try:
+            # Phase 1: Patch Training
+            if patch_epochs > 0:
+                print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
+                patch_model = PatchTrainModel(
+                    self.model,
+                    patch_size=patch_size,
+                    patch_calculation_method=patch_calculation_method
+                )
+                
+                # Create training arguments for patch phase
+                patch_training_args = {
+                    "num_train_epochs": num_epochs,
+                    "per_device_train_batch_size": batch_size,
+                    "per_device_eval_batch_size": batch_size,
+                    "max_steps": patch_steps,
+                    **trainer_kwargs
+                }
+                
+                data_collator = DataCollatorForLanguageModeling(
+                    tokenizer=self.tokenizer,
+                    mlm=False
+                )
+                
+                # Train with patch model
+                trainer = trainer_manager.setup_trainer(
+                    model=patch_model,
+                    train_dataset=train_dataset,
+                    eval_dataset=eval_dataset,
+                    tokenizer=self.tokenizer,
+                    batch_size=batch_size,
+                    training_stage="patch_phase"
+                )
+                trainer.train()
+                
+                # Get the trained model
+                self.model = patch_model.base_model
             
-            # Create training arguments for standard phase
-            standard_training_args = TrainingArguments(
-                num_train_epochs=num_epochs,
-                per_device_train_batch_size=batch_size,
-                per_device_eval_batch_size=batch_size,
-                max_steps=standard_steps,
-                **trainer_kwargs
-            )
-            torch.cuda.empty_cache()
-            # Train with standard model
-            trainer = Trainer(
-                model=standard_model,
-                args=standard_training_args,
-                train_dataset=train_dataset,
-                eval_dataset=eval_dataset,
-                data_collator=data_collator
-            )
-            trainer.train()
+            # Phase 2: Standard Training
+            if standard_epochs > 0:
+                print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
+                standard_model = self.model
+                
+                # Create training arguments for standard phase
+                standard_training_args = {
+                    "num_train_epochs": num_epochs,
+                    "per_device_train_batch_size": batch_size,
+                    "per_device_eval_batch_size": batch_size,
+                    "max_steps": standard_steps,
+                    **trainer_kwargs
+                }
+                torch.cuda.empty_cache()
+                # Train with standard model
+                trainer = trainer_manager.setup_trainer(
+                    model=standard_model,
+                    train_dataset=train_dataset,
+                    eval_dataset=eval_dataset,
+                    tokenizer=self.tokenizer,
+                    batch_size=batch_size,
+                    training_stage="standard_phase"
+                )
+                trainer.train()
+                
+                # Get the final trained model
+                self.model = standard_model
             
-            # Get the final trained model
-            self.model = standard_model
-            # self.model.save_pretrained('PT_model')
-        return trainer, self.model
+            return trainer, self.model
+        finally:
+            # Make sure to finish the wandb run
+            trainer_manager.finish_wandb()
 
     def calculate_total_batches(self, train_dataset, batch_size, gradient_accumulation_steps):
         return len(train_dataset) // (batch_size * gradient_accumulation_steps)

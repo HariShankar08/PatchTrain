@@ -38,6 +38,12 @@ class TrainingConfig:
     eval_strategy: str = "steps"
     eval_steps: int = 200
     save_strategy: str = "no"
+    # Wandb configuration
+    use_wandb: bool = True
+    wandb_project: str = "patch_train"
+    wandb_entity: Optional[str] = None
+    wandb_run_name: Optional[str] = None
+    wandb_group: Optional[str] = None
 
 @dataclass
 class DatasetConfig:
