@@ -100,14 +100,14 @@ def get_dataset_config(args):
         )
     elif args.dataset == "wmt_hi":
         return DatasetConfig(
-            dataset_name="wmt14",
+            dataset_name="wmt/wmt14",
             subset="hi-en",
             prompt_template="Translate from Hindi to English:\n{source_text}\n\nEnglish:",
             answer_template="{target_text}"
         )
     elif args.dataset == "wmt_fr":
         return DatasetConfig(
-            dataset_name="wmt14",
+            dataset_name="wmt/wmt14",
             subset="fr-en",
             prompt_template="Translate from French to English:\n{source_text}\n\nEnglish:",
             answer_template="{target_text}"
