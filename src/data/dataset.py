@@ -114,7 +114,7 @@ class WMTProcessor(BaseProcessor):
         # Format examples
         formatted_dataset = self.dataset.map(
             self.format_example,
-            remove_columns=["translation", "id"],
+            remove_columns=["translation"],
         )
 
         # Tokenize with chat template
