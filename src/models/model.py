@@ -4,7 +4,7 @@ from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, Pe
 from config.config import ModelConfig, TrainingConfig
 from .patch_model import PatchTrainModel
 from typing import Union, Optional
-from training.trainer import ModelTrainer
+from training.trainer import ModelTrainer, GPUMemoryCallback
 
 class ModelManager:
     def __init__(self, config: ModelConfig):
@@ -161,6 +161,11 @@ class ModelManager:
                     tokenizer=self.tokenizer,
                     mlm=False
                 )
+
+                callbacks = []
+                if training_config.use_wandb:
+                    callbacks.append(GPUMemoryCallback())
+
                 
                 # Train with patch model
                 trainer = trainer_manager.setup_trainer(
@@ -231,15 +236,22 @@ class ModelManager:
         """
         Train a model using the patch training strategy with PEFT.
         
-        This method implements a two-phase training approach:
-        1. First phase: Train with patch_size for (lambda_ratio * num_epochs) epochs - or patch_epochs
-        2. Second phase: Train with patch_size=1 for the remaining epochs - or standard_epochs
-        
         Args:
             train_dataset: Training dataset
             eval_dataset: Optional evaluation dataset
+            patch_size: Size of patches for patch training
+            patch_calculation_method: Method to calculate patch values
+            lambda_ratio: Ratio of training to use patch training
+            num_epochs: Total number of epochs
+            patch_epochs: Number of epochs for patch training (overrides lambda_ratio)
+            standard_epochs: Number of epochs for standard training (overrides lambda_ratio)
+            batch_size: Batch size for training
+            training_config: Configuration for training (if None, a default config will be used)
             **trainer_kwargs: Additional arguments to pass to the Trainer
         """
+        if training_config is None:
+            training_config = TrainingConfig()
+
         if self.model is None:
             self.setup_lora()
         
@@ -250,21 +262,22 @@ class ModelManager:
             standard_epochs = num_epochs - patch_epochs
 
         total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
+        print(f"Total batches: {total_batches * num_epochs}")
         patch_steps = int(total_batches * lambda_ratio)
         standard_steps = total_batches - patch_steps
 
         patch_steps = patch_steps * num_epochs
         standard_steps = standard_steps * num_epochs
+        print(f"Patch steps: {patch_steps}")
+        print(f"Standard steps: {standard_steps}")
+        print(f'Both equal: {patch_steps == standard_steps}')
         
-        if training_config is None:
-            training_config = TrainingConfig()
-
         trainer_manager = ModelTrainer(training_config)
         
         try:
             # Phase 1: Patch Training
             if patch_epochs > 0:
-                print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
+                print(f"Starting Phase 1: Patch Training with PEFT (patch_size={patch_size}) for {patch_epochs} epochs")
                 patch_model = PatchTrainModel(
                     self.model,
                     patch_size=patch_size,
@@ -291,8 +304,9 @@ class ModelManager:
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
+                    data_collator=data_collator,
                     batch_size=batch_size,
-                    training_stage="patch_phase",
+                    training_stage="patch_phase_peft",
                 )
                 trainer.train()
                 
@@ -301,7 +315,7 @@ class ModelManager:
             
             # Phase 2: Standard Training
             if standard_epochs > 0:
-                print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
+                print(f"Starting Phase 2: Standard Training with PEFT (patch_size=1) for {standard_epochs} epochs")
                 standard_model = self.model
                 
                 # Create training arguments for standard phase
@@ -315,12 +329,11 @@ class ModelManager:
                 torch.cuda.empty_cache()
                 # Train with standard model
                 trainer = trainer_manager.setup_trainer(
-                    model=standard_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="standard_phase",
+                    training_stage="standard_peft_phase"
                 )
                 trainer.train()
                 
