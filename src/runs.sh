@@ -1,13 +1,22 @@
 #!/bin/bash
 
-echo "Running Patch Training on OPT-125M"
-python main.py --mode patch_train --model_path facebook/opt-125m --num_runs 5 --save_path output/opt125_k4_2p1f | tee logs/opt125_k4_2p1f.log
+echo "Running Patch Training with K=4, Llama 3.2 1B Instruct on dataset: WMT-FR"
+python main.py --mode patch_train --model_path meta-llama/Llama-3.2-1B-Instruct --dataset wmt14_fr-en --save_path output/llama32_1b_k4_2p1f | tee logs/llama32_1b_k4_2p1f.log
 
-echo "Running Full Training on OPT-125M"
-python main.py --mode full_finetune --model_path facebook/opt-125m --num_runs 5 --save_path output/opt125_fft | tee logs/opt125_fft.log
+echo "Running Full Training with Llama 3.2 1B Instruct on dataset: WMT-FR"
+python main.py --mode full_finetune --model_path meta-llama/Llama-3.2-1B-Instruct --dataset wmt14_fr-en --save_path output/llama32_1b_fft | tee logs/llama32_1b_fft.log
 
-echo "Running Patch Training on OPT-350M"
-python main.py --mode patch_train --model_path facebook/opt-350m --num_runs 5 --save_path output/opt350_k4_2p1f | tee logs/opt350_k4_2p1f.log
+echo "Running Patch Training with K=2, Llama 3.2 1B Instruct on dataset: WMT-FR"
+python main.py --mode patch_train --patch_size 2 --model_path meta-llama/Llama-3.2-1B-Instruct --dataset wmt14_fr-en --save_path output/llama32_1b_k2_2p1f | tee logs/llama32_1b_k2_2p1f.log
 
-echo "Running Full Training on OPT-350M"
-python main.py --mode full_finetune --model_path facebook/opt-350m --num_runs 5 --save_path output/opt350_fft | tee logs/opt350_fft.log
+echo "Running Patch Training with K=8, Llama 3.2 1B Instruct on dataset: WMT-FR"
+python main.py --mode patch_train --patch_size 8 --model_path meta-llama/Llama-3.2-1B-Instruct --dataset wmt14_fr-en --save_path output/llama32_1b_k2_2p1f | tee logs/llama32_1b_k2_2p1f.log
+
+echo "Running Patch Training with K=16, Llama 3.2 1B Instruct on dataset: WMT-FR"
+python main.py --mode patch_train --patch_size 16 --model_path meta-llama/Llama-3.2-1B-Instruct --dataset wmt14_fr-en --save_path output/llama32_1b_k2_2p1f | tee logs/llama32_1b_k2_2p1f.log
+
+
+
+
+
+
