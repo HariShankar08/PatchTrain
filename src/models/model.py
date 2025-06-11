@@ -324,6 +324,7 @@ class ModelManager:
                 torch.cuda.empty_cache()
                 # Train with standard model
                 trainer = trainer_manager.setup_trainer(
+                    model=standard_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
