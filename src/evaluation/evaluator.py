@@ -96,21 +96,23 @@ class ModelEvaluator:
             
             # Generate prediction
             with torch.no_grad():
-                # Generate with repetition penalty, length penalty, and early stopping
+                # Generate with optimized parameters for translation/summarization
                 outputs = model.generate(
                     **inputs,
-                    max_new_tokens=self.config.max_new_tokens,
-                    temperature=self.config.temperature,
-                    do_sample=self.config.do_sample,
+                    max_new_tokens=50,
+                    do_sample=False,
                     pad_token_id=tokenizer.eos_token_id,
                     output_scores=True,
                     return_dict_in_generate=True,
-                    repetition_penalty=1.2,
-                    length_penalty=1.0,
-                    num_beams=4,
-                    top_k=50,
-                    top_p=0.95,
-                    early_stopping=True,
+                    num_beams=4,  # Using beam search for better quality
+                    length_penalty=0.6,  # Favor shorter sequences for summarization
+                    no_repeat_ngram_size=3,  # Prevent repetition of n-grams
+                    early_stopping=True,  # Stop when all beams are finished
+                    diversity_penalty=0.1,  # Add some diversity to beam search
+                    num_beam_groups=1,  # Default beam groups
+                    top_k=50,  # Keep top 50 tokens for sampling
+                    top_p=0.9,  # Nucleus sampling threshold
+                    repetition_penalty=1.2,  # Additional repetition prevention
                 )
                 
                 # Calculate perplexity
