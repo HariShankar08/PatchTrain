@@ -11,6 +11,9 @@ class ModelManager:
         self.config = config
         self.model = None
         self.tokenizer = None
+        # Determine the device
+        self.device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+        print(f"Using device: {self.device}")
 
     def load_model_and_tokenizer(self, model_path: str = None):
         """Load the base model and tokenizer."""
@@ -26,35 +29,35 @@ class ModelManager:
         if model_path:
             try:
                 # Try loading as a PEFT model first
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    self.config.model_name,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                )
+                base_model = base_model.to(self.device)
                 self.model = PeftModel.from_pretrained(
-                    AutoModelForCausalLM.from_pretrained(
-                        self.config.model_name,
-                        # device_map="auto",
-                        torch_dtype=torch.bfloat16,
-                    ),
+                    base_model,
                     model_path
                 )
             except:
                 # If not a PEFT model, load as regular model
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_path,
-                    # device_map="auto",
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
+                self.model = self.model.to(self.device)
         else:
-            if self.config.use_4bit:
+            if self.config.use_4bit and self.device == "cuda":
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
                     load_in_4bit=True,
-                    # device_map="auto",
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
             else:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    # device_map="auto",
-                    torch_dtype=torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
+                self.model = self.model.to(self.device)
 
         return self.model, self.tokenizer
 
@@ -157,16 +160,6 @@ class ModelManager:
                     **trainer_kwargs
                 }
                 
-                data_collator = DataCollatorForLanguageModeling(
-                    tokenizer=self.tokenizer,
-                    mlm=False
-                )
-
-                callbacks = []
-                if training_config.use_wandb:
-                    callbacks.append(GPUMemoryCallback())
-
-                
                 # Train with patch model
                 trainer = trainer_manager.setup_trainer(
                     model=patch_model,
@@ -174,7 +167,8 @@ class ModelManager:
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="patch_phase"
+                    training_stage="patch_phase",
+                    training_args=patch_training_args
                 )
                 trainer.train()
                 
@@ -202,7 +196,8 @@ class ModelManager:
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="standard_phase"
+                    training_stage="standard_phase",
+                    training_args=standard_training_args
                 )
                 trainer.train()
                 
@@ -293,7 +288,6 @@ class ModelManager:
                     **trainer_kwargs
                 }
                 
-                
                 # Train with patch model
                 trainer = trainer_manager.setup_trainer(
                     model=patch_model,
@@ -302,6 +296,7 @@ class ModelManager:
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
                     training_stage="patch_phase_peft",
+                    training_args=patch_training_args
                 )
                 trainer.train()
                 
@@ -329,7 +324,8 @@ class ModelManager:
                     eval_dataset=eval_dataset,
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
-                    training_stage="standard_peft_phase"
+                    training_stage="standard_peft_phase",
+                    training_args=standard_training_args
                 )
                 trainer.train()
                 

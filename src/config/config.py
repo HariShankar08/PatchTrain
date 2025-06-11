@@ -32,7 +32,7 @@ class TrainingConfig:
     warmup_steps: int = 100
     gradient_accumulation_steps: int = 4
     fp16: bool = False
-    bf16: bool = True
+    bf16: bool = False
     max_grad_norm=1.0
     logging_steps: int = 10
     eval_strategy: str = "steps"

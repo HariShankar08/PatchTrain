@@ -110,30 +110,35 @@ class ModelTrainer:
                 
         return self._wandb_run
 
-    def setup_trainer(self, model, train_dataset, eval_dataset, tokenizer, batch_size, training_stage: str = None):
+    def setup_trainer(self, model, train_dataset, eval_dataset, tokenizer, batch_size, training_stage: str = None, training_args: dict = None):
         """Setup the Hugging Face Trainer with the specified configuration."""
         # Initialize wandb if needed
         if self.config.use_wandb:
             self._init_wandb(model.config._name_or_path, training_stage)
 
-        training_args = TrainingArguments(
-            output_dir=self.config.output_dir,
-            gradient_accumulation_steps=self.config.gradient_accumulation_steps,
-            warmup_steps=self.config.warmup_steps,
-            num_train_epochs=self.config.num_train_epochs,
-            learning_rate=self.config.learning_rate,
-            fp16=self.config.fp16,
-            bf16=self.config.bf16,
-            logging_steps=self.config.logging_steps,
-            eval_strategy=self.config.eval_strategy,
-            eval_steps=self.config.eval_steps,
-            per_device_eval_batch_size=batch_size,
-            per_device_train_batch_size=batch_size,
-            # Disable saving checkpoints during training
-            save_strategy="no",
-            # Enable wandb logging
-            report_to="wandb" if self.config.use_wandb else None,
-        )
+        # Start with default training arguments
+        args_dict = {
+            "output_dir": self.config.output_dir,
+            "gradient_accumulation_steps": self.config.gradient_accumulation_steps,
+            "warmup_steps": self.config.warmup_steps,
+            "num_train_epochs": self.config.num_train_epochs,
+            "learning_rate": self.config.learning_rate,
+            "fp16": self.config.fp16,
+            "bf16": self.config.bf16,
+            "logging_steps": self.config.logging_steps,
+            "eval_strategy": self.config.eval_strategy,
+            "eval_steps": self.config.eval_steps,
+            "per_device_eval_batch_size": batch_size,
+            "per_device_train_batch_size": batch_size,
+            "save_strategy": "no",
+            "report_to": "wandb" if self.config.use_wandb else None,
+        }
+
+        # Update with provided training arguments if any
+        if training_args:
+            args_dict.update(training_args)
+
+        training_args = TrainingArguments(**args_dict)
 
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=tokenizer,
