@@ -24,7 +24,8 @@ class ModelConfig:
     use_qlora: bool = False  # Whether to use QLoRA (4-bit quantization) or regular LoRA
     lora_rank: int = 8
     max_seq_length: int = 512
-    batch_size: int = 2
+    per_device_train_batch_size: int = 2
+    per_device_eval_batch_size: int = 2
 
 @dataclass
 class TrainingConfig:
@@ -37,7 +38,8 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 4
     fp16: bool = False
     bf16: bool = True
-    
+    per_device_train_batch_size: int = 2
+    per_device_eval_batch_size: int = 2
     max_grad_norm=1.0
     logging_steps: int = 10
     eval_strategy: str = "steps"
