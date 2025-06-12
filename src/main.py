@@ -138,6 +138,10 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
     torch.backends.cudnn.benchmark = False
     set_seed(seed)  # Transformers specific
     
+    # Update training config with seed and save path
+    training_config.seed = seed
+    training_config.save_path = f"{run_config.save_path}"
+    
     # Setup data processing
     print(f"\nSetting up data processing for run {seed}...")
     if args.dataset == "cnn":

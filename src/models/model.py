@@ -204,10 +204,17 @@ class ModelManager:
                 # Get the final trained model
                 self.model = standard_model
             
+            # Save only the base model to avoid weight sharing issues
+            save_path = f"{training_config.save_path}_seed{training_config.seed}"
+            if hasattr(self.model, 'base_model'):
+                self.model.base_model.save_pretrained(save_path)
+            else:
+                self.model.save_pretrained(save_path)
+            
             return trainer, self.model
         finally:
             # Make sure to finish the wandb run
-            trainer_manager.finish_wandb()
+            trainer_manager.finish_wandb(model_path=save_path)
 
     def save_adapters(self, path: str):
         """Save the LoRA adapters."""
@@ -332,10 +339,14 @@ class ModelManager:
                 # Get the final trained model
                 self.model = standard_model
             
+            # Save the PEFT model
+            save_path = f'{training_config.save_path}_seed{training_config.seed}'
+            self.save_adapters(save_path)
+            
             return trainer, self.model
         finally:
             # Make sure to finish the wandb run
-            trainer_manager.finish_wandb()
+            trainer_manager.finish_wandb(model_path=save_path)
 
     def calculate_total_batches(self, train_dataset, batch_size, gradient_accumulation_steps):
         return len(train_dataset) // (batch_size * gradient_accumulation_steps)

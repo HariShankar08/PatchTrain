@@ -4,6 +4,7 @@ import wandb
 import os
 import torch
 import psutil
+from datetime import datetime
 
 wandb.login(key='3ec3e02fc75a1a05f6f949246341161384c0f57b')
 
@@ -68,9 +69,21 @@ class ModelTrainer:
             # Initialize wandb only if no run exists
             run_name = self.config.wandb_run_name
             if run_name is None:
-                run_name = f"{os.path.basename(model_name)}"
+                # Create a descriptive run name
+                base_name = os.path.basename(model_name)
+                run_name = f"{base_name}"
+                
+                # Add training stage if provided
                 if training_stage:
                     run_name += f"_{training_stage}"
+                
+                # Add seed for uniqueness
+                if hasattr(self.config, 'seed'):
+                    run_name += f"_seed{self.config.seed}"
+                
+                # Add timestamp for absolute uniqueness
+                timestamp = datetime.now().strftime("%m%d_%H%M")
+                run_name += f"_{timestamp}"
 
             self._wandb_run = wandb.init(
                 project=self.config.wandb_project,
@@ -80,6 +93,12 @@ class ModelTrainer:
                 resume="allow",
                 # Configure custom charts
                 config={
+                    "architecture": base_name,
+                    "training_stage": training_stage,
+                    "seed": getattr(self.config, 'seed', None),
+                    "learning_rate": self.config.learning_rate,
+                    "epochs": self.config.num_train_epochs,
+                    "batch_size": self.config.per_device_train_batch_size if hasattr(self.config, 'per_device_train_batch_size') else None,
                     "custom_charts": {
                         "gpu_memory": {
                             "metrics": ["gpu_memory/allocated_gb", "gpu_memory/reserved_gb", "gpu_memory/max_allocated_gb"],
@@ -166,7 +185,28 @@ class ModelTrainer:
         trainer.train()
         return trainer
 
-    def finish_wandb(self):
+    def save_model_artifact(self, model_path: str, artifact_name: str = None):
+        """Save model artifacts to wandb."""
+        if not self.config.use_wandb or self._wandb_run is None:
+            return
+        
+        if artifact_name is None:
+            artifact_name = f"model-{wandb.run.id}"
+        
+        # Create a new artifact
+        artifact = wandb.Artifact(
+            name=artifact_name,
+            type="model",
+            description="Trained model weights and config"
+        )
+        
+        # Add model directory to the artifact
+        artifact.add_dir(model_path)
+        
+        # Log the artifact
+        wandb.log_artifact(artifact)
+
+    def finish_wandb(self, model_path: str = None):
         """Finish the wandb run if it exists."""
         if self._wandb_run is not None:
             # Log final GPU memory state
@@ -175,5 +215,10 @@ class ModelTrainer:
                     'gpu_info/final_memory_gb': torch.cuda.memory_allocated() / 1024**3,
                     'gpu_info/max_memory_gb': torch.cuda.max_memory_allocated() / 1024**3
                 })
+            
+            # Save model artifacts if path is provided
+            if model_path is not None:
+                self.save_model_artifact(model_path)
+            
             wandb.finish()
             self._wandb_run = None 

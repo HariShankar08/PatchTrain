@@ -27,6 +27,8 @@ class ModelConfig:
 @dataclass
 class TrainingConfig:
     output_dir: str = "./outputs"
+    save_path: str = "./outputs/model"  # Path to save model artifacts
+    seed: int = 42  # Random seed for training
     num_train_epochs: int = 3
     learning_rate: float = 2e-4
     warmup_steps: int = 100
