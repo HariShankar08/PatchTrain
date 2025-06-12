@@ -123,25 +123,28 @@ class ModelManager:
         if training_config is None:
             training_config = TrainingConfig()
 
-        # Calculate number of epochs for each phase
-        if patch_epochs is None:
-            patch_epochs = int(num_epochs * lambda_ratio)
-        if standard_epochs is None:
-            standard_epochs = num_epochs - patch_epochs
-
-        total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
-        print(f"Total batches: {total_batches * num_epochs}")
-        patch_steps = int(total_batches * lambda_ratio)
-        standard_steps = total_batches - patch_steps
-
-        patch_steps = patch_steps * num_epochs
-        standard_steps = standard_steps * num_epochs
-        print(f"Patch steps: {patch_steps}")
-        print(f"Standard steps: {standard_steps}")
-        print(f'Both equal: {patch_steps == standard_steps}')
-        trainer_manager = ModelTrainer(training_config)
+        # Define save_path before the try block
+        save_path = f"{training_config.save_path}_seed{training_config.seed}"
         
         try:
+            # Calculate number of epochs for each phase
+            if patch_epochs is None:
+                patch_epochs = int(num_epochs * lambda_ratio)
+            if standard_epochs is None:
+                standard_epochs = num_epochs - patch_epochs
+
+            total_batches = self.calculate_total_batches(train_dataset, batch_size, gradient_accumulation_steps=4)
+            print(f"Total batches: {total_batches * num_epochs}")
+            patch_steps = int(total_batches * lambda_ratio)
+            standard_steps = total_batches - patch_steps
+
+            patch_steps = patch_steps * num_epochs
+            standard_steps = standard_steps * num_epochs
+            print(f"Patch steps: {patch_steps}")
+            print(f"Standard steps: {standard_steps}")
+            print(f'Both equal: {patch_steps == standard_steps}')
+            trainer_manager = ModelTrainer(training_config)
+            
             # Phase 1: Patch Training
             if patch_epochs > 0:
                 print(f"Starting Phase 1: Patch Training (patch_size={patch_size}) for {patch_epochs} epochs")
@@ -204,16 +207,9 @@ class ModelManager:
                 # Get the final trained model
                 self.model = standard_model
             
-            # Save only the base model to avoid weight sharing issues
-            save_path = f"{training_config.save_path}_seed{training_config.seed}"
-            if hasattr(self.model, 'base_model'):
-                self.model.base_model.save_pretrained(save_path)
-            else:
-                self.model.save_pretrained(save_path)
-            
             return trainer, self.model
         finally:
-            # Make sure to finish the wandb run
+            # Make sure to finish the wandb run and save artifact
             trainer_manager.finish_wandb(model_path=save_path)
 
     def save_adapters(self, path: str):

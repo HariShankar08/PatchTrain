@@ -207,18 +207,22 @@ class ModelTrainer:
         wandb.log_artifact(artifact)
 
     def finish_wandb(self, model_path: str = None):
-        """Finish the wandb run if it exists."""
-        if self._wandb_run is not None:
-            # Log final GPU memory state
-            if torch.cuda.is_available():
-                wandb.log({
-                    'gpu_info/final_memory_gb': torch.cuda.memory_allocated() / 1024**3,
-                    'gpu_info/max_memory_gb': torch.cuda.max_memory_allocated() / 1024**3
-                })
+        """Finish the wandb run and save model artifact."""
+        if not self.config.use_wandb or self._wandb_run is None:
+            return
+
+        if model_path is not None:
+            artifact_name = f"model-{wandb.run.id}"
             
-            # Save model artifacts if path is provided
-            if model_path is not None:
-                self.save_model_artifact(model_path)
+            # Create a new artifact
+            artifact = wandb.Artifact(
+                name=artifact_name,
+                type="model",
+                description="Trained model weights and config"
+            )
             
-            wandb.finish()
-            self._wandb_run = None 
+            # Log the artifact
+            wandb.log_artifact(artifact)
+
+        # Finish the run
+        wandb.finish() 
