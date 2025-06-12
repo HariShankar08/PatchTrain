@@ -1,10 +1,11 @@
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments, DataCollatorForLanguageModeling
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, PeftModel, AutoPeftModelForCausalLM
 from config.config import ModelConfig, TrainingConfig
 from .patch_model import PatchTrainModel
 from typing import Union, Optional
 from training.trainer import ModelTrainer, GPUMemoryCallback
+import bitsandbytes as bnb
 
 class ModelManager:
     def __init__(self, config: ModelConfig):
@@ -29,40 +30,52 @@ class ModelManager:
         if model_path:
             try:
                 # Try loading as a PEFT model first
-                base_model = AutoModelForCausalLM.from_pretrained(
-                    self.config.model_name,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
-                )
-                base_model = base_model.to(self.device)
-                self.model = PeftModel.from_pretrained(
-                    base_model,
-                    model_path
+                self.model = AutoPeftModelForCausalLM.from_pretrained(
+                    model_path,
+                    device_map="auto",
+                    torch_dtype=torch.float32 if self.device in ("mps", "cpu") else torch.bfloat16,
                 )
             except:
                 # If not a PEFT model, load as regular model
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_path,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                    device_map="auto",
+                    torch_dtype=torch.float32 if self.device in ("mps", "cpu") else torch.bfloat16,
                 )
-                self.model = self.model.to(self.device)
         else:
-            if self.config.use_4bit and self.device == "cuda":
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.config.model_name,
-                    load_in_4bit=True,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
-                )
-            else:
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.config.model_name,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
-                )
-                self.model = self.model.to(self.device)
+            load_kwargs = {
+                "device_map": "auto",
+                "torch_dtype": torch.float32 if self.device in ("mps", "cpu") else torch.bfloat16,
+            }
+            
+            # Handle quantization based on config
+            if self.config.use_qlora:
+                # QLoRA always uses 4-bit quantization
+                load_kwargs.update({
+                    "load_in_4bit": True,
+                    "quantization_config": {
+                        "bnb_4bit_compute_dtype": torch.bfloat16,
+                        "bnb_4bit_use_double_quant": True,
+                        "bnb_4bit_quant_type": "nf4",
+                        "llm_int8_threshold": 6.0,
+                        "llm_int8_has_fp16_weight": False,
+                    }
+                })
+            elif self.config.use_4bit:
+                # Regular 4-bit quantization without QLoRA optimizations
+                load_kwargs["load_in_4bit"] = True
+            elif self.config.use_8bit:
+                load_kwargs["load_in_8bit"] = True
+                
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.config.model_name,
+                **load_kwargs
+            )
 
         return self.model, self.tokenizer
 
-    def setup_lora(self):
-        """Configure and apply LoRA to the model."""
+    def setup_lora(self, r=8, alpha=32, target_modules=None, lora_dropout=0.05):
+        """Configure and apply LoRA/QLoRA to the model."""
         if self.model is None:
             self.load_model_and_tokenizer()
 
@@ -70,22 +83,38 @@ class ModelManager:
         if hasattr(self.model, "peft_config"):
             return self.model
 
-        # Prepare model for k-bit training if using 4-bit
-        if self.config.use_4bit:
-            self.model = prepare_model_for_kbit_training(self.model)
+        # Prepare model for quantized training if using QLoRA or other quantization
+        if self.config.use_qlora or self.config.use_4bit or self.config.use_8bit:
+            self.model = prepare_model_for_kbit_training(
+                self.model,
+                use_gradient_checkpointing=True,
+            )
+
+        if target_modules is None:
+            if self.config.use_qlora:
+                # QLoRA typically targets all linear layers
+                target_modules = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "down_proj", "up_proj", "lm_head"]
+            else:
+                # Regular LoRA targets attention layers
+                target_modules = ["q_proj", "k_proj", "v_proj", "o_proj"]
 
         # LoRA configuration
         peft_config = LoraConfig(
-            r=self.config.lora_rank,
-            lora_alpha=32,
-            target_modules=["q_proj", "v_proj"],
-            lora_dropout=0.05,
+            r=r,
+            lora_alpha=alpha,
+            target_modules=target_modules,
+            lora_dropout=lora_dropout,
             bias="none",
             task_type="CAUSAL_LM",
         )
 
         # Apply LoRA
         self.model = get_peft_model(self.model, peft_config)
+        
+        # Enable gradient checkpointing for memory efficiency
+        self.model.gradient_checkpointing_enable()
+        
+        # Print trainable parameters info
         self.model.print_trainable_parameters()
 
         return self.model
@@ -143,7 +172,9 @@ class ModelManager:
             print(f"Patch steps: {patch_steps}")
             print(f"Standard steps: {standard_steps}")
             print(f'Both equal: {patch_steps == standard_steps}')
-            trainer_manager = ModelTrainer(training_config)
+            
+            from training.pytorch_trainer import PyTorchTrainer
+            trainer_manager = PyTorchTrainer(training_config)
             
             # Phase 1: Patch Training
             if patch_epochs > 0:
@@ -154,26 +185,14 @@ class ModelManager:
                     patch_calculation_method=patch_calculation_method
                 )
                 
-                # Create training arguments for patch phase
-                patch_training_args = {
-                    "num_train_epochs": num_epochs,
-                    "per_device_train_batch_size": batch_size,
-                    "per_device_eval_batch_size": batch_size,
-                    "max_steps": patch_steps,
-                    **trainer_kwargs
-                }
-                
                 # Train with patch model
-                trainer = trainer_manager.setup_trainer(
+                patch_model = trainer_manager.train(
                     model=patch_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
-                    tokenizer=self.tokenizer,
-                    batch_size=batch_size,
                     training_stage="patch_phase",
-                    training_args=patch_training_args
+                    max_steps=patch_steps
                 )
-                trainer.train()
                 
                 # Get the trained model
                 self.model = patch_model.base_model
@@ -183,31 +202,20 @@ class ModelManager:
                 print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
                 standard_model = self.model
                 
-                # Create training arguments for standard phase
-                standard_training_args = {
-                    "num_train_epochs": num_epochs,
-                    "per_device_train_batch_size": batch_size,
-                    "per_device_eval_batch_size": batch_size,
-                    "max_steps": standard_steps,
-                    **trainer_kwargs
-                }
                 torch.cuda.empty_cache()
                 # Train with standard model
-                trainer = trainer_manager.setup_trainer(
+                standard_model = trainer_manager.train(
                     model=standard_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
-                    tokenizer=self.tokenizer,
-                    batch_size=batch_size,
                     training_stage="standard_phase",
-                    training_args=standard_training_args
+                    max_steps=standard_steps
                 )
-                trainer.train()
                 
                 # Get the final trained model
                 self.model = standard_model
             
-            return trainer, self.model
+            return trainer_manager, self.model
         finally:
             # Make sure to finish the wandb run and save artifact
             trainer_manager.finish_wandb(model_path=save_path)
@@ -270,7 +278,8 @@ class ModelManager:
         print(f"Standard steps: {standard_steps}")
         print(f'Both equal: {patch_steps == standard_steps}')
         
-        trainer_manager = ModelTrainer(training_config)
+        from training.pytorch_trainer import PyTorchTrainer
+        trainer_manager = PyTorchTrainer(training_config)
         
         try:
             # Phase 1: Patch Training
@@ -282,26 +291,14 @@ class ModelManager:
                     patch_calculation_method=patch_calculation_method
                 )
                 
-                # Create training arguments for patch phase
-                patch_training_args = {
-                    "num_train_epochs": num_epochs,
-                    "per_device_train_batch_size": batch_size,
-                    "per_device_eval_batch_size": batch_size,
-                    "max_steps": patch_steps,
-                    **trainer_kwargs
-                }
-                
                 # Train with patch model
-                trainer = trainer_manager.setup_trainer(
+                patch_model = trainer_manager.train(
                     model=patch_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
-                    tokenizer=self.tokenizer,
-                    batch_size=batch_size,
                     training_stage="patch_phase_peft",
-                    training_args=patch_training_args
+                    max_steps=patch_steps
                 )
-                trainer.train()
                 
                 # Get the trained model
                 self.model = patch_model.base_model
@@ -311,26 +308,15 @@ class ModelManager:
                 print(f"Starting Phase 2: Standard Training with PEFT (patch_size=1) for {standard_epochs} epochs")
                 standard_model = self.model
                 
-                # Create training arguments for standard phase
-                standard_training_args = {
-                    "num_train_epochs": num_epochs,
-                    "per_device_train_batch_size": batch_size,
-                    "per_device_eval_batch_size": batch_size,
-                    "max_steps": standard_steps,
-                    **trainer_kwargs
-                }
                 torch.cuda.empty_cache()
                 # Train with standard model
-                trainer = trainer_manager.setup_trainer(
+                standard_model = trainer_manager.train(
                     model=standard_model,
                     train_dataset=train_dataset,
                     eval_dataset=eval_dataset,
-                    tokenizer=self.tokenizer,
-                    batch_size=batch_size,
                     training_stage="standard_peft_phase",
-                    training_args=standard_training_args
+                    max_steps=standard_steps
                 )
-                trainer.train()
                 
                 # Get the final trained model
                 self.model = standard_model
@@ -339,7 +325,7 @@ class ModelManager:
             save_path = f'{training_config.save_path}_seed{training_config.seed}'
             self.save_adapters(save_path)
             
-            return trainer, self.model
+            return trainer_manager, self.model
         finally:
             # Make sure to finish the wandb run
             trainer_manager.finish_wandb(model_path=save_path)

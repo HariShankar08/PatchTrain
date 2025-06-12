@@ -38,6 +38,11 @@ def parse_args():
         help="Skip training and only evaluate the model"
     )
     parser.add_argument(
+        "--use_qlora",
+        action="store_true",
+        help="Use QLoRA (4-bit quantization) instead of regular LoRA"
+    )
+    parser.add_argument(
         "--patch_size",
         type=int,
         default=4,
@@ -287,6 +292,7 @@ def main():
     )
     
     model_config = ModelConfig()
+    model_config.use_qlora = args.use_qlora  # Set QLoRA flag from command line
     training_config = TrainingConfig()
     data_config = get_dataset_config(args)
     eval_config = EvaluationConfig()

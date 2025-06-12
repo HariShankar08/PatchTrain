@@ -64,6 +64,8 @@ class PatchTrainModel(nn.Module):
         weights = torch.softmax(self._para_means, dim=0)
         return torch.einsum('bnph,p->bnh', x, weights)
 
+
+
     def calculate_patch(self, x: torch.Tensor) -> torch.Tensor:
         """
         Calculate patch representation based on the configured method.

@@ -18,11 +18,13 @@ class RunConfig:
 
 @dataclass
 class ModelConfig:
-    model_name: str = "google/gemma-3-4b-it"
-    use_4bit: bool = False
+    model_name: str = "meta-llama/Llama-3.2-1B-Instruct"
+    use_4bit: bool = True
+    use_8bit: bool = False
+    use_qlora: bool = False  # Whether to use QLoRA (4-bit quantization) or regular LoRA
     lora_rank: int = 8
     max_seq_length: int = 512
-    batch_size: int = 8
+    batch_size: int = 2
 
 @dataclass
 class TrainingConfig:
@@ -35,6 +37,7 @@ class TrainingConfig:
     gradient_accumulation_steps: int = 4
     fp16: bool = False
     bf16: bool = True
+    
     max_grad_norm=1.0
     logging_steps: int = 10
     eval_strategy: str = "steps"
