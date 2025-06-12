@@ -34,6 +34,7 @@ class BaseProcessor:
             truncation=True,
             max_length=512,
             padding="max_length",
+            return_tensors='pt'  # Return lists for dataset mapping
         )
 
 class CNNProcessor(BaseProcessor):
@@ -60,6 +61,7 @@ class CNNProcessor(BaseProcessor):
         formatted_dataset = self.dataset.map(
             self.format_example,
             remove_columns=["article", "highlights", "id"],
+            desc="Formatting examples"
         )
 
         # Tokenize with chat template
@@ -69,7 +71,9 @@ class CNNProcessor(BaseProcessor):
         tokenized_dataset = formatted_dataset.map(
             tokenize,
             batched=True,
-            remove_columns=["messages"]
+            remove_columns=["messages"],
+            desc="Tokenizing dataset",
+            num_proc=4  # Use multiple processes for faster preprocessing
         )
 
         return tokenized_dataset
@@ -124,7 +128,9 @@ class WMTProcessor(BaseProcessor):
         tokenized_dataset = formatted_dataset.map(
             tokenize,
             batched=True,
-            remove_columns=["messages"]
+            remove_columns=["messages"],
+            desc="Tokenizing dataset",
+            num_proc=4  # Use multiple processes for faster preprocessing
         )
 
         return tokenized_dataset
