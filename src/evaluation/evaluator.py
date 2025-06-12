@@ -133,11 +133,14 @@ class ModelEvaluator:
                         length_penalty=0.6,
                         no_repeat_ngram_size=3,
                         early_stopping=True,
-                        repetition_penalty=1.2,
+                        repetition_penalty=1.2
                     )
                     
+                    # Handle both tensor and GenerateOutput cases
+                    generated_tokens = outputs[0] if outputs.dim() == 2 else outputs
+                    
                     pred_text = tokenizer.decode(
-                        outputs.sequences[0][inputs["input_ids"].shape[1]:], 
+                        generated_tokens[inputs["input_ids"].shape[1]:], 
                         skip_special_tokens=True
                     )
                     predictions.append(pred_text.strip())
