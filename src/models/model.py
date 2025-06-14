@@ -173,10 +173,12 @@ class ModelManager:
                     training_stage="patch_phase",
                     training_args=patch_training_args
                 )
-                trainer.train()
+                trainer, patch_train_time = trainer_manager.train(trainer)
                 
                 # Get the trained model
                 self.model = patch_model.base_model
+            else:
+                patch_train_time = 0
             
             # Phase 2: Standard Training
             if standard_epochs > 0:
@@ -189,6 +191,8 @@ class ModelManager:
                     "per_device_train_batch_size": batch_size,
                     "per_device_eval_batch_size": batch_size,
                     "max_steps": standard_steps,
+                    "save_strategy": "no",  # Disable disk saving
+                    "save_total_limit": 0,  # Don't keep any checkpoints on disk
                     **trainer_kwargs
                 }
                 torch.cuda.empty_cache()
@@ -202,15 +206,18 @@ class ModelManager:
                     training_stage="standard_phase",
                     training_args=standard_training_args
                 )
-                trainer.train()
+                trainer, standard_train_time = trainer_manager.train(trainer)
                 
                 # Get the final trained model
                 self.model = standard_model
+            else:
+                standard_train_time = 0
             
-            return trainer, self.model
+            total_train_time = patch_train_time + standard_train_time
+            return trainer, self.model, total_train_time
         finally:
             # Make sure to finish the wandb run and save artifact
-            trainer_manager.finish_wandb(model_path=save_path)
+            trainer_manager.finish_wandb()
 
     def save_adapters(self, path: str):
         """Save the LoRA adapters."""
@@ -301,10 +308,12 @@ class ModelManager:
                     training_stage="patch_phase_peft",
                     training_args=patch_training_args
                 )
-                trainer.train()
+                trainer, patch_train_time = trainer_manager.train(trainer)
                 
                 # Get the trained model
                 self.model = patch_model.base_model
+            else:
+                patch_train_time = 0
             
             # Phase 2: Standard Training
             if standard_epochs > 0:
@@ -317,6 +326,8 @@ class ModelManager:
                     "per_device_train_batch_size": batch_size,
                     "per_device_eval_batch_size": batch_size,
                     "max_steps": standard_steps,
+                    "save_strategy": "no",  # Disable disk saving
+                    "save_total_limit": 0,  # Don't keep any checkpoints on disk
                     **trainer_kwargs
                 }
                 torch.cuda.empty_cache()
@@ -330,19 +341,16 @@ class ModelManager:
                     training_stage="standard_peft_phase",
                     training_args=standard_training_args
                 )
-                trainer.train()
+                trainer, standard_train_time = trainer_manager.train(trainer)
                 
                 # Get the final trained model
                 self.model = standard_model
             
-            # Save the PEFT model
-            save_path = f'{training_config.save_path}_seed{training_config.seed}'
-            self.save_adapters(save_path)
-            
-            return trainer, self.model
+            total_train_time = patch_train_time + standard_train_time
+            return trainer, self.model, total_train_time
         finally:
             # Make sure to finish the wandb run
-            trainer_manager.finish_wandb(model_path=save_path)
+            trainer_manager.finish_wandb()
 
     def calculate_total_batches(self, train_dataset, batch_size, gradient_accumulation_steps):
         return len(train_dataset) // (batch_size * gradient_accumulation_steps)

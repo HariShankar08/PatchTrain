@@ -18,7 +18,7 @@ class RunConfig:
 
 @dataclass
 class ModelConfig:
-    model_name: str = "google/gemma-3-4b-it"
+    model_name: str = "meta-llama/Llama-3.2-1B-Instruct"
     use_4bit: bool = False
     lora_rank: int = 8
     max_seq_length: int = 512
@@ -30,7 +30,7 @@ class TrainingConfig:
     save_path: str = "./outputs/model"  # Path to save model artifacts
     seed: int = 42  # Random seed for training
     num_train_epochs: int = 3
-    learning_rate: float = 2e-4
+    learning_rate: float = 1e-5
     warmup_steps: int = 100
     gradient_accumulation_steps: int = 4
     fp16: bool = False

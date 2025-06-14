@@ -5,6 +5,7 @@ import os
 import torch
 import psutil
 from datetime import datetime
+import time
 
 wandb.login(key='3ec3e02fc75a1a05f6f949246341161384c0f57b')
 
@@ -149,7 +150,8 @@ class ModelTrainer:
             "eval_steps": self.config.eval_steps,
             "per_device_eval_batch_size": batch_size,
             "per_device_train_batch_size": batch_size,
-            "save_strategy": "no",
+            "save_strategy": "no",  # Disable disk saving
+            "save_total_limit": 0,  # Don't keep any checkpoints on disk
             "report_to": "wandb" if self.config.use_wandb else None,
         }
 
@@ -182,8 +184,11 @@ class ModelTrainer:
     def train(self, trainer):
         """Execute the training process."""
         print("Starting training...")
+        start_time = time.time()
         trainer.train()
-        return trainer
+        end_time = time.time()
+        train_time = end_time - start_time
+        return trainer, train_time
 
     def save_model_artifact(self, model_path: str, artifact_name: str = None):
         """Save model artifacts to wandb."""

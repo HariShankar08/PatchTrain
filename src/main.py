@@ -11,6 +11,10 @@ from evaluation.evaluator import ModelEvaluator
 import random
 import torch
 from transformers import set_seed
+import csv
+import os
+import json
+from datetime import datetime
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Model Training and Evaluation")
@@ -188,11 +192,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             )
 
             # Train model
-            trainer = trainer_manager.train(trainer)
-
-            # Save adapters
-            print(f"Saving adapters to {run_config.save_path}...")
-            model_manager.save_adapters(f'{run_config.save_path}_seed{seed}')
+            trainer, train_time = trainer_manager.train(trainer)
             
         elif run_config.mode == RunMode.FULL_FINETUNE:
             print("Preparing for full fine-tuning...")
@@ -208,15 +208,11 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
             )
 
             # Train model
-            trainer = trainer_manager.train(trainer)
-
-            # Save model
-            print(f"Saving model to {run_config.save_path}...")
-            trainer.save_model(f'{run_config.save_path}_seed{seed}')
+            trainer, train_time = trainer_manager.train(trainer)
             
         elif run_config.mode == RunMode.PATCH_TRAIN:
             print(f"Starting patch training for run {seed}...")
-            trainer, model = model_manager.train_patch_model(
+            trainer, model, train_time = model_manager.train_patch_model(
                 train_dataset=train_dataset,
                 eval_dataset=val_dataset,
                 patch_size=args.patch_size,
@@ -227,18 +223,12 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 batch_size=args.batch_size,
                 training_config=training_config
             )
-            
-            # Save only the base model to avoid weight sharing issues
-            if hasattr(model, 'base_model'):
-                model.base_model.save_pretrained(f"{run_config.save_path}_seed{seed}")
-            else:
-                model.save_pretrained(f"{run_config.save_path}_seed{seed}")
         
         elif run_config.mode == RunMode.PATCH_PEFT:
             print("Preparing for patch PEFT training...")
             # Train with patch PEFT strategy
             print(f"Starting patch PEFT training with patch_size={args.patch_size}, lambda_ratio={args.lambda_ratio}")
-            trainer, model = model_manager.train_patch_peft(
+            trainer, model, train_time = model_manager.train_patch_peft(
                 train_dataset=train_dataset,
                 eval_dataset=val_dataset,  # Use validation set during training
                 patch_size=args.patch_size,
@@ -258,10 +248,6 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
                 standard_epochs=args.standard_epochs,
                 batch_size=args.batch_size
             )
-            
-            # Save the PEFT model
-            print(f"Saving PEFT model to {run_config.save_path}...")
-            model_manager.save_adapters(f'{run_config.save_path}_seed{seed}')
 
     # Final evaluation on test set
     print(f"Evaluating model on test set for run {seed}...")
@@ -272,7 +258,44 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
         eval_config=eval_config
     )
     
+    # Add training time to metrics
+    if not run_config.eval_only:
+        metrics['train_time'] = train_time
+    
     return metrics
+
+def format_metric_stats(mean, std):
+    """Format metric statistics as 'mean +/- std'."""
+    return f"{mean:.4f} +/- {std:.4f}"
+
+def save_metrics_to_csv(metrics_data, csv_file="training_metrics.csv"):
+    """Save metrics data to CSV file."""
+    # Check if file exists to determine if we need to write headers
+    file_exists = os.path.isfile(csv_file)
+    
+    # Prepare the row data
+    row_data = {
+        'Model': metrics_data['model_name'],
+        'LoRA': 'Yes' if metrics_data['lora'] else 'No',
+        'RunMode': metrics_data['run_mode'],
+        'Patch Size': metrics_data['patch_size'] if metrics_data['patch_size'] is not None else '',
+        'Lambda': metrics_data['lambda_ratio'] if metrics_data['lambda_ratio'] is not None else '',
+    }
+    
+    # Add metrics as a JSON string
+    metrics_dict = {}
+    for metric_name in metrics_data['metrics'].keys():
+        mean = metrics_data['metrics'][metric_name]['mean']
+        std = metrics_data['metrics'][metric_name]['std']
+        metrics_dict[metric_name] = format_metric_stats(mean, std)
+    row_data['Metrics'] = json.dumps(metrics_dict)
+    
+    # Write to CSV
+    with open(csv_file, 'a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=['Model', 'LoRA', 'RunMode', 'Patch Size', 'Lambda', 'Metrics'])
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row_data)
 
 def main():
     # Parse command line arguments
@@ -316,13 +339,28 @@ def main():
     # Calculate and print aggregate statistics
     if args.num_runs > 1:
         print("\nAggregate Statistics:")
+        aggregate_metrics = {}
         for metric_name in all_metrics[0].keys():
             values = [m[metric_name] for m in all_metrics]
             mean = np.mean(values)
             std = np.std(values)
+            aggregate_metrics[metric_name] = {'mean': mean, 'std': std}
             print(f"{metric_name}:")
             print(f"  Mean: {mean:.4f}")
             print(f"  Std:  {std:.4f}")
+        
+        # Prepare metrics data for CSV
+        metrics_data = {
+            'model_name': model_config.model_name_or_path,
+            'lora': run_config.mode == RunMode.LORA_FINETUNE or run_config.mode == RunMode.PATCH_PEFT,
+            'run_mode': run_config.mode.value,
+            'patch_size': args.patch_size if run_config.mode in [RunMode.PATCH_TRAIN, RunMode.PATCH_PEFT] else None,
+            'lambda_ratio': args.lambda_ratio if run_config.mode in [RunMode.PATCH_TRAIN, RunMode.PATCH_PEFT] else None,
+            'metrics': aggregate_metrics
+        }
+        
+        # Save to CSV
+        save_metrics_to_csv(metrics_data)
 
 if __name__ == "__main__":
     main() 
