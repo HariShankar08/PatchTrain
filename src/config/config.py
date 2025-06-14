@@ -18,7 +18,7 @@ class RunConfig:
 
 @dataclass
 class ModelConfig:
-    model_name: str = "google/gemma-3-4b-it"
+    model_name: str = "meta-llama/Llama-3.2-1B-Instruct"
     use_4bit: bool = False
     lora_rank: int = 8
     max_seq_length: int = 512
