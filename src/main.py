@@ -351,7 +351,7 @@ def main():
         
         # Prepare metrics data for CSV
         metrics_data = {
-            'model_name': model_config.model_name_or_path,
+            'model_name': args.model_path,
             'lora': run_config.mode == RunMode.LORA_FINETUNE or run_config.mode == RunMode.PATCH_PEFT,
             'run_mode': run_config.mode.value,
             'patch_size': args.patch_size if run_config.mode in [RunMode.PATCH_TRAIN, RunMode.PATCH_PEFT] else None,
