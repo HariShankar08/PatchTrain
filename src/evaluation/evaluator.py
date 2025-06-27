@@ -14,6 +14,7 @@ class ModelEvaluator:
         self.rouge = evaluate.load('rouge')
         self.bleu = evaluate.load('bleu')
         self.sacrebleu = evaluate.load('sacrebleu')
+        # self.bertscore = evaluate.load('bertscore', module_type='metric')
         self.perplexity = evaluate.load('perplexity', module_type='metric')
 
     def format_as_conversation(self, user_content: str, assistant_content: str = None) -> list:
@@ -30,20 +31,32 @@ class ModelEvaluator:
         try:
             # Compute BLEU score with properly formatted inputs
             bleu_score = self.bleu.compute(
-                predictions=[pred.split() for pred in predictions],  # Pass untokenized predictions
-                references=[[ref.split()] for ref in references]  # Format as list of list of references
+                predictions=predictions, # [pred.split() for pred in predictions],  # Pass untokenized predictions
+                references=[[ref] for ref in references]  # Format as list of list of references
             )
             
             # SacreBLEU takes untokenized strings
             sacrebleu_score = self.sacrebleu.compute(
-                predictions=[pred.split() for pred in predictions],
-                references=[[ref.split()] for ref in references]
+                predictions=predictions, #[pred.split() for pred in predictions],
+                references=[[ref] for ref in references]
             )
+
+            # Compute BERTScore
+            # bertscore_score = self.bertscore.compute(
+            #     predictions=predictions,
+            #     references=[[ref] for ref in references],  # Pass untokenized references
+            #     lang="en",
+            #     rescale_with_baseline=True
+            # )
             
             return {
                 "bleu": bleu_score["bleu"],
-                "sacrebleu": sacrebleu_score["score"]
+                "sacrebleu": sacrebleu_score["score"],
+            #     "bertscore_precision": np.mean(bertscore_score["precision"]),
+            #     "bertscore_recall": np.mean(bertscore_score["recall"]),
+            #     "bertscore_f1": np.mean(bertscore_score["f1"]),
             }
+        
         except Exception as e:
             print(f"Warning: Error computing translation metrics: {str(e)}")
             print(f"Sample prediction: {predictions[0] if predictions else 'No predictions'}")
@@ -134,6 +147,7 @@ class ModelEvaluator:
                         no_repeat_ngram_size=3,
                         early_stopping=True,
                         repetition_penalty=1.2,
+                        return_dict_in_generate=True
                     )
                     
                     pred_text = tokenizer.decode(
@@ -157,7 +171,7 @@ class ModelEvaluator:
         metrics.update({
             "perplexity": np.mean(perplexities),
             "perplexity_std": np.std(perplexities),
-            "perplexities": perplexities  # raw values for analysis
+            # "perplexities": perplexities  # raw values for analysis
         })
         
         return metrics, predictions, references
