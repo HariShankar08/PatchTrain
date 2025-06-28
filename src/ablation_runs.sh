@@ -1,41 +1,22 @@
 #!/bin/bash
 
-echo "Running Patch Training with K=8, lambda=0.5 (Llama 3.2 1B Instruct on WMT-FR)"
-python main.py --mode patch_train \
-    --patch_size 8 \
-    --lambda_ratio 0.5 \
-    --model_path meta-llama/Llama-3.2-1B-Instruct \
-    --dataset wmt_fr \
-    --save_path output/llama32_1b_k8_lambda05 \
-    --batch_size 8 \
-    --num_runs 5 | tee logs/llama32_1b_k8_lambda05.log
+MODEL_PATH="meta-llama/Llama-3.2-1B-Instruct"
+MODEL_SHORT='llama32_1b'
+DATASET_NAME="wmt_fr"  # WMT-FR dataset
+BATCH_SIZE=8
+NUM_RUNS=5
 
-echo "Running Patch Training with K=8, lambda=0.75 (Llama 3.2 1B Instruct on WMT-FR)"
-python main.py --mode patch_train \
-    --patch_size 8 \
-    --lambda_ratio 0.75 \
-    --model_path meta-llama/Llama-3.2-1B-Instruct \
-    --dataset wmt_fr \
-    --save_path output/llama32_1b_k8_lambda075 \
-    --batch_size 8 \
-    --num_runs 5 | tee logs/llama32_1b_k8_lambda075.log
+PATCH_SIZE=8
 
-echo "Running Patch Training with K=8, lambda=0.8 (Llama 3.2 1B Instruct on WMT-FR)"
-python main.py --mode patch_train \
-    --patch_size 8 \
-    --lambda_ratio 0.8 \
-    --model_path meta-llama/Llama-3.2-1B-Instruct \
-    --dataset wmt_fr \
-    --save_path output/llama32_1b_k8_lambda08 \
-    --batch_size 8 \
-    --num_runs 5 | tee logs/llama32_1b_k8_lambda08.log 
-
-echo "Running Patch Training with K=8, lambda=1.0 (Llama 3.2 1B Instruct on WMT-FR)"
-python main.py --mode patch_train \
-    --patch_size 8 \
-    --lambda_ratio 1.0 \
-    --model_path meta-llama/Llama-3.2-1B-Instruct \
-    --dataset wmt_fr \
-    --save_path output/llama32_1b_k8_lambda08 \
-    --batch_size 8 \
-    --num_runs 5 | tee logs/llama32_1b_k8_lambda08.log 
+for ratio in (0.5 0.75 0.8 1.0); do
+    echo "Running Patch Training with K=8, lambda=$ratio (Llama 3.2 1B Instruct on WMT-FR)"
+    python main.py --mode patch_train \
+        --patch_size $PATCH_SIZE \
+        --lambda_ratio $ratio \
+        --model_path $MODEL_PATH \
+        --dataset $DATASET_NAME \
+        --batch_size $BATCH_SIZE \
+        --num_runs $NUM_RUNS | tee logs/${MODEL_SHORT}_k${PATCH_SIZE}_lambda${ratio//./}.log
+    echo "Completed Patch Training with K=8, lambda=$ratio"
+    echo "----------------------------------------"
+done

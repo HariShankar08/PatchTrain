@@ -153,6 +153,7 @@ class ModelTrainer:
             "save_strategy": "no",  # Disable disk saving
             "save_total_limit": 0,  # Don't keep any checkpoints on disk
             "report_to": "wandb" if self.config.use_wandb else None,
+            "max_grad_norm": self.config.max_grad_norm,
         }
 
         # Update with provided training arguments if any

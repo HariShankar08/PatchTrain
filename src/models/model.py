@@ -31,7 +31,7 @@ class ModelManager:
                 # Try loading as a PEFT model first
                 base_model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
                 )
                 base_model = base_model.to(self.device)
                 self.model = PeftModel.from_pretrained(
@@ -42,7 +42,7 @@ class ModelManager:
                 # If not a PEFT model, load as regular model
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_path,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
                 )
                 self.model = self.model.to(self.device)
         else:
@@ -50,12 +50,12 @@ class ModelManager:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
                     load_in_4bit=True,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
                 )
             else:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
                 )
                 self.model = self.model.to(self.device)
 

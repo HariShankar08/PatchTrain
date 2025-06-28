@@ -82,11 +82,10 @@ class WMTProcessor(BaseProcessor):
         # Apply subsetting for French-English
         if self.config.subset == "fr-en":
             # Subset the splits
-            dataset = dataset.filter(
-                lambda _, idx: idx < 24000 if _ == "train" else idx < 3000,
-                with_indices=True
-            )
-        
+            dataset['train'] = dataset['train'].select(range(24000))
+            dataset['validation'] = dataset['validation'].select(range(3000))
+            dataset['test'] = dataset['test'].select(range(3000))
+
         self.dataset = dataset
         return self.dataset
 

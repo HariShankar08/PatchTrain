@@ -1,12 +1,12 @@
 #!/bin/bash
 
-MODEL_PATH="meta-llama/Llama-3.2-1B-Instruct". # Path to the model
-MODEL_SHORT='llama32_1b'. # Short name for the model - only for your convenience
+MODEL_PATH="meta-llama/Llama-3.2-1B-Instruct" # Path to the model
+MODEL_SHORT='llama32_1b' # Short name for the model - only for your convenience
 DATASET_NAME="wmt_fr"  # WMT-FR dataset <- Replace with "wmt_hi" or "cnn"
-BATCH_SIZE=8. # Batch size for training - in case it breaks for larger models, you can reduce it to 4 or 2
+BATCH_SIZE=8 # Batch size for training - in case it breaks for larger models, you can reduce it to 4 or 2
 NUM_RUNS=5
 
-for PATCH_SIZE in (2 4 8 16); do
+for PATCH_SIZE in 2 4 8 16; do
     echo "Running Patch Training with K=$PATCH_SIZE ($MODEL_SHORT on $DATASET_NAME) \
         with Batch Size=$BATCH_SIZE, \
         Num Runs=$NUM_RUNS"

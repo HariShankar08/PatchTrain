@@ -8,7 +8,7 @@ NUM_RUNS=5
 
 PATCH_SIZE=8
 
-for ratio in (0.5 0.75 0.8 1.0); do
+for ratio in 0.5 0.75 0.8 1.0; do
     echo "Running Patch Training with K=8, lambda=$ratio (Llama 3.2 1B Instruct on WMT-FR)"
     python main.py --mode patch_train \
         --patch_size $PATCH_SIZE \

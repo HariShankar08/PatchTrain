@@ -248,7 +248,7 @@ python main.py --mode patch_peft --model_path $MODEL_PATH --dataset $DATASET_NAM
 #     --model_path $MODEL_PATH \
 #     --dataset $DATASET_NAME \
 #     --save_path $MODEL_SHORT'_bs'$BATCH_SIZE \
-#     --batch_size $BATCH_SIZE \
+ #     --batch_size $BATCH_SIZE \
 
 # echo "Running Patch Training ($MODEL_PATH) on $DATASET_NAME with K=$PATCH_SIZE, \
 # Lambda Ratio=$LAMBDA_RATIO, \
