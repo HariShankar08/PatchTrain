@@ -16,6 +16,12 @@ import os
 import json
 from datetime import datetime
 
+from huggingface_hub import login
+
+key = ''
+if key:
+    login(token=key)  # Login to Hugging Face Hub if key is provided
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Model Training and Evaluation")
     parser.add_argument(

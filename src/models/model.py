@@ -31,7 +31,7 @@ class ModelManager:
                 # Try loading as a PEFT model first
                 base_model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
                 base_model = base_model.to(self.device)
                 self.model = PeftModel.from_pretrained(
@@ -42,7 +42,7 @@ class ModelManager:
                 # If not a PEFT model, load as regular model
                 self.model = AutoModelForCausalLM.from_pretrained(
                     model_path,
-                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
                 self.model = self.model.to(self.device)
         else:
@@ -50,12 +50,12 @@ class ModelManager:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
                     load_in_4bit=True,
-                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
             else:
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.config.model_name,
-                    torch_dtype=torch.float16 if self.device == "mps" else torch.bfloat16,
+                    torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
                 self.model = self.model.to(self.device)
 
@@ -160,6 +160,7 @@ class ModelManager:
                     "per_device_train_batch_size": batch_size,
                     "per_device_eval_batch_size": batch_size,
                     "max_steps": patch_steps,
+
                     **trainer_kwargs
                 }
                 
@@ -171,7 +172,8 @@ class ModelManager:
                     tokenizer=self.tokenizer,
                     batch_size=batch_size,
                     training_stage="patch_phase",
-                    training_args=patch_training_args
+                    training_args=patch_training_args,
+
                 )
                 trainer, patch_train_time = trainer_manager.train(trainer)
                 
