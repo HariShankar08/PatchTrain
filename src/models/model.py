@@ -33,7 +33,7 @@ class ModelManager:
                     self.config.model_name,
                     torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
-                base_model = base_model.to(self.device)
+                # base_model = base_model.to(self.device)
                 self.model = PeftModel.from_pretrained(
                     base_model,
                     model_path
@@ -44,7 +44,7 @@ class ModelManager:
                     model_path,
                     torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
-                self.model = self.model.to(self.device)
+                # self.model = self.model.to(self.device)
         else:
             if self.config.use_4bit and self.device == "cuda":
                 self.model = AutoModelForCausalLM.from_pretrained(
@@ -57,7 +57,7 @@ class ModelManager:
                     self.config.model_name,
                     torch_dtype=torch.float32 if self.device == "mps" else torch.bfloat16,
                 )
-                self.model = self.model.to(self.device)
+                # self.model = self.model.to(self.device)
 
         return self.model, self.tokenizer
 
