@@ -180,12 +180,20 @@ class ModelManager:
                 # Get the trained model
                 patch_model = patch_model.cpu()
                 self.model = patch_model.base_model
+
+                del patch_model
+                del trainer
             else:
                 patch_train_time = 0
             
             # Phase 2: Standard Training
             if standard_epochs > 0:
                 print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
+                
+                # Move model back to GPU for standard training
+                print("Moving model back to GPU for standard training...")
+                self.model = self.model.to(self.device)
+                
                 standard_model = self.model
                 
                 # Create training arguments for standard phase
@@ -313,15 +321,26 @@ class ModelManager:
                 )
                 trainer, patch_train_time = trainer_manager.train(trainer)
                 
-                # Unload the model from the GPU and get the base model
-                patch_model = patch_model.cpu() 
+                # Extract the base model first, then move to CPU
+                print("Extracting base model and moving to CPU...")
                 self.model = patch_model.base_model
+                self.model = self.model.cpu()
+                torch.cuda.empty_cache()
+                
+                # Clean up patch model
+                del patch_model
+                del trainer
             else:
                 patch_train_time = 0
             
             # Phase 2: Standard Training
             if standard_epochs > 0:
                 print(f"Starting Phase 2: Standard Training with PEFT (patch_size=1) for {standard_epochs} epochs")
+                
+                # Move model back to GPU for standard training
+                print("Moving model back to GPU for standard training...")
+                self.model = self.model.to(self.device)
+                
                 standard_model = self.model
                 
                 # Create training arguments for standard phase
