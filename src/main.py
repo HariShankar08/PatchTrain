@@ -98,17 +98,17 @@ def parse_args():
         help="Batch size for training"
     )
     parser.add_argument(
-        "--no_streaming",
+        "--use_streaming",
         action="store_true",
-        help="Disable streaming for dataset loading (streaming is enabled by default)"
+        help="Enable streaming for dataset loading (streaming is disabled by default for WMT datasets)"
     )
     
     return parser.parse_args()
 
 def get_dataset_config(args):
     """Get the appropriate dataset configuration based on the dataset argument."""
-    # Streaming is enabled by default, disable if --no_streaming is specified
-    use_streaming = not getattr(args, 'no_streaming', False)
+    # Streaming is disabled by default, enable if --use_streaming is specified
+    use_streaming = getattr(args, 'use_streaming', False)
     
     if args.dataset == "cnn":
         return DatasetConfig(

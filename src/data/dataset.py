@@ -77,30 +77,20 @@ class CNNProcessor(BaseProcessor):
 class WMTProcessor(BaseProcessor):
     def load_dataset(self):
         """Load the WMT14 dataset with appropriate subsetting."""
-        # For French-English and Russian-English, use streaming to avoid downloading full dataset
+        # For French-English and Russian-English, use subsetting to avoid downloading full dataset
         if self.config.subset in ["fr-en", "ru-en"]:
-            # Use streaming if configured, otherwise use split slicing
-            streaming = getattr(self.config, 'use_streaming', True)  # Default to True
+            # Load the full dataset first (this is necessary for subsetting)
+            # The dataset will be cached locally after first download
+            full_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset,
+                streaming=False  # We need non-streaming for subsetting
+            )
             
-            # Load only the required splits
-            train_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"train[:24000]",
-                streaming=streaming
-            )
-            validation_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"validation[:3000]",
-                streaming=streaming
-            )
-            test_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"test[:3000]",
-                streaming=streaming
-            )
+            # Slice the datasets to get only the required samples
+            train_dataset = full_dataset['train'].select(range(24000))
+            validation_dataset = full_dataset['validation'].select(range(3000))
+            test_dataset = full_dataset['test'].select(range(3000))
             
             # Create dataset dict and cast to DatasetDict
             dataset = DatasetDict({
@@ -108,6 +98,12 @@ class WMTProcessor(BaseProcessor):
                 'validation': validation_dataset,
                 'test': test_dataset
             })
+            
+            print(f"Loaded WMT-14 {self.config.subset} dataset:")
+            print(f"  - Training samples: {len(train_dataset)}")
+            print(f"  - Validation samples: {len(validation_dataset)}")
+            print(f"  - Test samples: {len(test_dataset)}")
+            
         else:
             # For other subsets, load normally
             dataset = load_dataset(self.config.dataset_name, self.config.subset)
@@ -117,40 +113,11 @@ class WMTProcessor(BaseProcessor):
     
     def load_dataset_streaming(self):
         """Load the WMT14 dataset with streaming for memory efficiency."""
-        # For French-English and Russian-English, use true streaming
-        if self.config.subset in ["fr-en", "ru-en"]:
-            # Load only the required splits with streaming
-            train_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"train[:24000]",
-                streaming=True  # True streaming for memory efficiency
-            )
-            validation_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"validation[:3000]",
-                streaming=True
-            )
-            test_dataset = load_dataset(
-                self.config.dataset_name, 
-                self.config.subset, 
-                split=f"test[:3000]",
-                streaming=True
-            )
-            
-            # Create dataset dict and cast to DatasetDict
-            dataset = DatasetDict({
-                'train': train_dataset,
-                'validation': validation_dataset,
-                'test': test_dataset
-            })
-        else:
-            # For other subsets, load normally
-            dataset = load_dataset(self.config.dataset_name, self.config.subset)
-
-        self.dataset = dataset
-        return self.dataset
+        # Note: This method is kept for compatibility but streaming with subsetting
+        # is not directly supported by the datasets library
+        print("Warning: Streaming with subsetting is not directly supported.")
+        print("Falling back to standard loading with subsetting.")
+        return self.load_dataset()
 
     def format_example(self, example: Dict[str, Any]) -> Dict[str, str]:
         """Format a single example with the prompt template."""

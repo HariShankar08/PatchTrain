@@ -53,7 +53,7 @@ class DatasetConfig:
     prompt_template: str
     answer_template: str
     subset: Optional[str] = None
-    use_streaming: bool = True  # Whether to use streaming for dataset loading (default: True)
+    use_streaming: bool = False  # Whether to use streaming for dataset loading (default: False for WMT datasets)
     
 
 @dataclass
