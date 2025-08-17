@@ -76,8 +76,8 @@ class CNNProcessor(BaseProcessor):
 
 class WMTProcessor(BaseProcessor):
     def load_dataset(self):
-        """Load the WMT14 dataset with appropriate subsetting."""
-        # For French-English and Russian-English, use subsetting to avoid downloading full dataset
+        """Load the WMT dataset with appropriate subsetting."""
+        # For French-English and Russian-English (WMT-14), use subsetting to avoid downloading full dataset
         if self.config.subset in ["fr-en", "ru-en"]:
             # Load the full dataset first (this is necessary for subsetting)
             # The dataset will be cached locally after first download
@@ -103,6 +103,33 @@ class WMTProcessor(BaseProcessor):
             print(f"  - Training samples: {len(train_dataset)}")
             print(f"  - Validation samples: {len(validation_dataset)}")
             print(f"  - Test samples: {len(test_dataset)}")
+            
+        # For Chinese-English (WMT-19), handle the different structure
+        elif self.config.subset == "zh-en":
+            # Load the full dataset first (this is necessary for subsetting)
+            full_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset,
+                streaming=False  # We need non-streaming for subsetting
+            )
+            
+            # WMT-19 ZH-EN only has train and validation splits
+            # Use validation as both validation and test sets
+            train_dataset = full_dataset['train'].select(range(24000))
+            validation_dataset = full_dataset['validation']
+            test_dataset = full_dataset['validation']  # Use validation as test set
+            
+            # Create dataset dict and cast to DatasetDict
+            dataset = DatasetDict({
+                'train': train_dataset,
+                'validation': validation_dataset,
+                'test': test_dataset
+            })
+            
+            print(f"Loaded WMT-19 {self.config.subset} dataset:")
+            print(f"  - Training samples: {len(train_dataset)}")
+            print(f"  - Validation samples: {len(validation_dataset)}")
+            print(f"  - Test samples: {len(test_dataset)} (using validation split)")
             
         else:
             # For other subsets, load normally

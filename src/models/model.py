@@ -178,6 +178,7 @@ class ModelManager:
                 trainer, patch_train_time = trainer_manager.train(trainer)
                 
                 # Get the trained model
+                patch_model = patch_model.cpu()
                 self.model = patch_model.base_model
             else:
                 patch_train_time = 0
@@ -312,7 +313,8 @@ class ModelManager:
                 )
                 trainer, patch_train_time = trainer_manager.train(trainer)
                 
-                # Get the trained model
+                # Unload the model from the GPU and get the base model
+                patch_model = patch_model.cpu() 
                 self.model = patch_model.base_model
             else:
                 patch_train_time = 0

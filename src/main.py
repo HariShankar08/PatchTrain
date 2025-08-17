@@ -88,7 +88,7 @@ def parse_args():
         "--dataset",
         type=str,
         default="cnn",
-        choices=["cnn", "wmt_hi", "wmt_fr", "wmt_ru"],
+        choices=["cnn", "wmt_hi", "wmt_fr", "wmt_ru", "wmt_zh"],
         help="Dataset to use for training"
     )
     parser.add_argument(
@@ -141,6 +141,14 @@ def get_dataset_config(args):
             answer_template="{target_text}",
             use_streaming=use_streaming
         )
+    elif args.dataset == "wmt_zh":
+        return DatasetConfig(
+            dataset_name="wmt/wmt19",
+            subset="zh-en",
+            prompt_template="Translate from Chinese to English:\n{source_text}\n\nEnglish:",
+            answer_template="{target_text}",
+            use_streaming=use_streaming
+        )
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")
 
@@ -175,7 +183,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
     print(f"\nSetting up data processing for run {seed}...")
     if args.dataset == "cnn":
         data_processor = CNNProcessor(data_config)
-    elif args.dataset in ["wmt_hi", "wmt_fr", "wmt_ru"]:
+    elif args.dataset in ["wmt_hi", "wmt_fr", "wmt_ru", "wmt_zh"]:
         data_processor = WMTProcessor(data_config)
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")
