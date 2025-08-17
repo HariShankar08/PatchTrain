@@ -88,7 +88,7 @@ def parse_args():
         "--dataset",
         type=str,
         default="cnn",
-        choices=["cnn", "wmt_hi", "wmt_fr"],
+        choices=["cnn", "wmt_hi", "wmt_fr", "wmt_ru"],
         help="Dataset to use for training"
     )
     parser.add_argument(
@@ -97,30 +97,49 @@ def parse_args():
         default=8,
         help="Batch size for training"
     )
+    parser.add_argument(
+        "--no_streaming",
+        action="store_true",
+        help="Disable streaming for dataset loading (streaming is enabled by default)"
+    )
     
     return parser.parse_args()
 
 def get_dataset_config(args):
     """Get the appropriate dataset configuration based on the dataset argument."""
+    # Streaming is enabled by default, disable if --no_streaming is specified
+    use_streaming = not getattr(args, 'no_streaming', False)
+    
     if args.dataset == "cnn":
         return DatasetConfig(
             dataset_name="abisee/cnn_dailymail",
             prompt_template="Summarize the following article:\n{article}\n\nSummary:",
-            answer_template="{highlights}"
+            answer_template="{highlights}",
+            use_streaming=use_streaming
         )
     elif args.dataset == "wmt_hi":
         return DatasetConfig(
             dataset_name="wmt/wmt14",
             subset="hi-en",
             prompt_template="Translate from Hindi to English:\n{source_text}\n\nEnglish:",
-            answer_template="{target_text}"
+            answer_template="{target_text}",
+            use_streaming=use_streaming
         )
     elif args.dataset == "wmt_fr":
         return DatasetConfig(
             dataset_name="wmt/wmt14",
             subset="fr-en",
             prompt_template="Translate from French to English:\n{source_text}\n\nEnglish:",
-            answer_template="{target_text}"
+            answer_template="{target_text}",
+            use_streaming=use_streaming
+        )
+    elif args.dataset == "wmt_ru":
+        return DatasetConfig(
+            dataset_name="wmt/wmt14",
+            subset="ru-en",
+            prompt_template="Translate from Russian to English:\n{source_text}\n\nEnglish:",
+            answer_template="{target_text}",
+            use_streaming=use_streaming
         )
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")
@@ -156,7 +175,7 @@ def run_training_iteration(run_config, model_config, training_config, data_confi
     print(f"\nSetting up data processing for run {seed}...")
     if args.dataset == "cnn":
         data_processor = CNNProcessor(data_config)
-    elif args.dataset in ["wmt_hi", "wmt_fr"]:
+    elif args.dataset in ["wmt_hi", "wmt_fr", "wmt_ru"]:
         data_processor = WMTProcessor(data_config)
     else:
         raise ValueError(f"Dataset {args.dataset} not supported")

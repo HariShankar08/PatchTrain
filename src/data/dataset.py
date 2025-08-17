@@ -1,4 +1,4 @@
-from datasets import load_dataset
+from datasets import load_dataset, DatasetDict
 from transformers import PreTrainedTokenizer
 from typing import Dict, Any
 from dataclasses import dataclass
@@ -77,14 +77,77 @@ class CNNProcessor(BaseProcessor):
 class WMTProcessor(BaseProcessor):
     def load_dataset(self):
         """Load the WMT14 dataset with appropriate subsetting."""
-        dataset = load_dataset(self.config.dataset_name, self.config.subset)
-        
-        # Apply subsetting for French-English
-        if self.config.subset == "fr-en":
-            # Subset the splits
-            dataset['train'] = dataset['train'].select(range(24000))
-            dataset['validation'] = dataset['validation'].select(range(3000))
-            dataset['test'] = dataset['test'].select(range(3000))
+        # For French-English and Russian-English, use streaming to avoid downloading full dataset
+        if self.config.subset in ["fr-en", "ru-en"]:
+            # Use streaming if configured, otherwise use split slicing
+            streaming = getattr(self.config, 'use_streaming', True)  # Default to True
+            
+            # Load only the required splits
+            train_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"train[:24000]",
+                streaming=streaming
+            )
+            validation_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"validation[:3000]",
+                streaming=streaming
+            )
+            test_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"test[:3000]",
+                streaming=streaming
+            )
+            
+            # Create dataset dict and cast to DatasetDict
+            dataset = DatasetDict({
+                'train': train_dataset,
+                'validation': validation_dataset,
+                'test': test_dataset
+            })
+        else:
+            # For other subsets, load normally
+            dataset = load_dataset(self.config.dataset_name, self.config.subset)
+
+        self.dataset = dataset
+        return self.dataset
+    
+    def load_dataset_streaming(self):
+        """Load the WMT14 dataset with streaming for memory efficiency."""
+        # For French-English and Russian-English, use true streaming
+        if self.config.subset in ["fr-en", "ru-en"]:
+            # Load only the required splits with streaming
+            train_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"train[:24000]",
+                streaming=True  # True streaming for memory efficiency
+            )
+            validation_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"validation[:3000]",
+                streaming=True
+            )
+            test_dataset = load_dataset(
+                self.config.dataset_name, 
+                self.config.subset, 
+                split=f"test[:3000]",
+                streaming=True
+            )
+            
+            # Create dataset dict and cast to DatasetDict
+            dataset = DatasetDict({
+                'train': train_dataset,
+                'validation': validation_dataset,
+                'test': test_dataset
+            })
+        else:
+            # For other subsets, load normally
+            dataset = load_dataset(self.config.dataset_name, self.config.subset)
 
         self.dataset = dataset
         return self.dataset
