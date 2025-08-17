@@ -5,6 +5,18 @@ from config.config import ModelConfig, TrainingConfig
 from .patch_model import PatchTrainModel
 from typing import Union, Optional
 from training.trainer import ModelTrainer, GPUMemoryCallback
+import gc
+import os
+
+def setup_memory_config():
+    """Setup PyTorch memory configuration to avoid fragmentation."""
+    # Set environment variable to avoid memory fragmentation
+    os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    
+    # Clear cache and reset memory stats
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
 
 class ModelManager:
     def __init__(self, config: ModelConfig):
@@ -14,6 +26,9 @@ class ModelManager:
         # Determine the device
         self.device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
         print(f"Using device: {self.device}")
+        
+        # Setup memory configuration
+        setup_memory_config()
 
     def load_model_and_tokenizer(self, model_path: str = None):
         """Load the base model and tokenizer."""
@@ -177,12 +192,20 @@ class ModelManager:
                 )
                 trainer, patch_train_time = trainer_manager.train(trainer)
                 
-                # Get the trained model
-                patch_model = patch_model.cpu()
+                # Extract the base model first, then move to CPU
+                print("Extracting base model and moving to CPU...")
                 self.model = patch_model.base_model
-
+                self.model = self.model.cpu()
+                torch.cuda.empty_cache()
+                
+                # Clean up patch model
                 del patch_model
                 del trainer
+                
+                # Force garbage collection
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             else:
                 patch_train_time = 0
             
@@ -190,9 +213,17 @@ class ModelManager:
             if standard_epochs > 0:
                 print(f"Starting Phase 2: Standard Training (patch_size=1) for {standard_epochs} epochs")
                 
+                # Check available memory before moving model back to GPU
+                if torch.cuda.is_available():
+                    free_memory = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated()
+                    print(f"Available GPU memory before standard training: {free_memory / 1024**3:.2f} GB")
+                
                 # Move model back to GPU for standard training
                 print("Moving model back to GPU for standard training...")
                 self.model = self.model.to(self.device)
+                
+                # Clear cache again after moving to GPU
+                torch.cuda.empty_cache()
                 
                 standard_model = self.model
                 
@@ -330,6 +361,11 @@ class ModelManager:
                 # Clean up patch model
                 del patch_model
                 del trainer
+                
+                # Force garbage collection
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
             else:
                 patch_train_time = 0
             
@@ -337,9 +373,17 @@ class ModelManager:
             if standard_epochs > 0:
                 print(f"Starting Phase 2: Standard Training with PEFT (patch_size=1) for {standard_epochs} epochs")
                 
+                # Check available memory before moving model back to GPU
+                if torch.cuda.is_available():
+                    free_memory = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated()
+                    print(f"Available GPU memory before standard training: {free_memory / 1024**3:.2f} GB")
+                
                 # Move model back to GPU for standard training
                 print("Moving model back to GPU for standard training...")
                 self.model = self.model.to(self.device)
+                
+                # Clear cache again after moving to GPU
+                torch.cuda.empty_cache()
                 
                 standard_model = self.model
                 
