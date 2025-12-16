@@ -1,0 +1,2 @@
+python test.py \
+  --model google/gemma-3-1b-it
