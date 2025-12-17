@@ -14,6 +14,9 @@ import sacrebleu
 from bert_score import score as bert_score
 from comet import download_model, load_from_checkpoint
 
+# Enable TensorFloat32 for better performance
+torch.set_float32_matmul_precision('high')
+
 
 # =========================
 # PROMPT (STRICT)
@@ -80,7 +83,7 @@ def translate_batch(
         **enc,
         max_new_tokens=max_new_tokens,
         do_sample=False,
-        temperature=0.0,
+        temperature=None,
         top_p=None,
         top_k=None
     )
@@ -150,6 +153,7 @@ def evaluate_dataset(
         
         lang_preds = []
         lang_refs = []
+        lang_logs = []
         
         for sample in tqdm(test_split, desc=src_lang):
             src = sample[src_lang]
@@ -171,14 +175,16 @@ def evaluate_dataset(
             lang_preds.append(pred)
             lang_refs.append(ref)
 
-            all_logs.append({
+            log_entry = {
                 "dataset": dataset_name,
                 "src_lang": src_lang,
                 "tgt_lang": "eng_Latn",
                 "source": src,
                 "prediction": pred,
                 "reference": ref
-            })
+            }
+            lang_logs.append(log_entry)
+            all_logs.append(log_entry)
         
         # Compute metrics for this language pair
         if lang_preds:
@@ -187,6 +193,15 @@ def evaluate_dataset(
             print(f"\n{src_lang} → eng_Latn Results:")
             for metric, score in lang_metrics.items():
                 print(f"  {metric}: {score:.4f}")
+            
+            # Save logs for this language immediately
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            lang_log_file = f"{output_dir}/{dataset_name.replace('/', '_')}_{src_lang}_logs_{timestamp}.json"
+            with open(lang_log_file, "w") as f:
+                json.dump(lang_logs, f, indent=2, ensure_ascii=False)
+            print(f"  Logs saved to: {lang_log_file}")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
